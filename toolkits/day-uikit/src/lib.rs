@@ -56,7 +56,7 @@ mod imp {
     use objc2::Message as _;
     use objc2_ui_kit::NSIndexPathUIKitAdditions as _;
     use objc2_ui_kit::NSObjectUIAccessibility;
-    #[allow(deprecated)]
+    use objc2_ui_kit::UITextInputTraits;
     use objc2_ui_kit::UIApplicationMain;
     use objc2_ui_kit::UINavigationControllerDelegate;
     use objc2_ui_kit::UISearchResultsUpdating;
@@ -7332,6 +7332,7 @@ mod imp {
                         tf.setText(Some(&NSString::from_str(&p.text)));
                         tf.setPlaceholder(Some(&NSString::from_str(&p.placeholder)));
                         tf.setBorderStyle(UITextBorderStyle::RoundedRect);
+                        tf.setSecureTextEntry(p.secure);
                         let tobj: &AnyObject = target.as_ref();
                         tf.addTarget_action_forControlEvents(
                             Some(tobj),
@@ -8062,6 +8063,7 @@ mod imp {
                                 tf.setPlaceholder(Some(&NSString::from_str(t)))
                             },
                             TextFieldPatch::Enabled(e) => unsafe { tf.setEnabled(*e) },
+                            TextFieldPatch::Secure(s) => unsafe { tf.setSecureTextEntry(*s) },
                         }
                     }
                 }

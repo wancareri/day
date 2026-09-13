@@ -3970,6 +3970,7 @@ pub mod props {
         pub text: String,
         pub placeholder: String,
         pub enabled: bool,
+        pub secure: bool,
     }
     #[derive(Clone, Debug, PartialEq)]
     pub enum TextFieldPatch {
@@ -3980,6 +3981,7 @@ pub mod props {
         },
         Placeholder(String),
         Enabled(bool),
+        Secure(bool),
     }
 
     /// How an image is scaled to fill its frame (§18.3). Maps to each toolkit's native scaling.
