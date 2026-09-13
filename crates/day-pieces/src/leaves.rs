@@ -924,6 +924,7 @@ pub struct TextField<S: Binding<String>> {
     value: S,
     placeholder: Option<TextSource>,
     on_submit: Option<Rc<dyn Fn()>>,
+    secure: bool,
 }
 
 pub fn text_field<S: Binding<String>>(value: S) -> TextField<S> {
@@ -931,6 +932,7 @@ pub fn text_field<S: Binding<String>>(value: S) -> TextField<S> {
         value,
         placeholder: None,
         on_submit: None,
+        secure: false,
     }
 }
 
@@ -944,6 +946,12 @@ impl<S: Binding<String>> TextField<S> {
     /// (docs/focus.md).
     pub fn on_submit(mut self, f: impl Fn() + 'static) -> Self {
         self.on_submit = Some(Rc::new(f));
+        self
+    }
+    /// Obscure the entered text (password field). On UIKit this sets
+    /// `isSecureTextEntry`; on other backends the equivalent echo-mode.
+    pub fn secure(mut self) -> Self {
+        self.secure = true;
         self
     }
 }
@@ -962,6 +970,7 @@ impl<S: Binding<String>> Piece for TextField<S> {
                 text: initial.clone(),
                 placeholder: ph,
                 enabled: true,
+                secure: self.secure,
             },
             Flex {
                 grow_w: true,
@@ -1197,6 +1206,7 @@ impl<Inner: SliderBuilder + Piece> SliderBuilder for Decorated<Inner> {
 pub trait TextFieldBuilder: Sized {
     fn placeholder<M>(self, t: impl IntoText<M>) -> Self;
     fn on_submit(self, f: impl Fn() + 'static) -> Self;
+    fn secure(self) -> Self;
 }
 
 impl<S: Binding<String>> TextFieldBuilder for TextField<S> {
@@ -1206,6 +1216,9 @@ impl<S: Binding<String>> TextFieldBuilder for TextField<S> {
     fn on_submit(self, f: impl Fn() + 'static) -> Self {
         TextField::on_submit(self, f)
     }
+    fn secure(self) -> Self {
+        TextField::secure(self)
+    }
 }
 
 impl<Inner: TextFieldBuilder + Piece> TextFieldBuilder for Decorated<Inner> {
@@ -1214,5 +1227,8 @@ impl<Inner: TextFieldBuilder + Piece> TextFieldBuilder for Decorated<Inner> {
     }
     fn on_submit(self, f: impl Fn() + 'static) -> Self {
         self.map_inner(|inner_piece| inner_piece.on_submit(f))
+    }
+    fn secure(self) -> Self {
+        self.map_inner(|inner_piece| inner_piece.secure())
     }
 }

@@ -907,6 +907,9 @@ impl Toolkit for MockToolkit {
                         w.enabled = *e;
                         format!("enabled={e}")
                     }
+                    TextFieldPatch::Secure(s) => {
+                        format!("secure={s}")
+                    }
                 }
             } else if let Some(p) = patch.downcast_ref::<CanvasProps>() {
                 w.ops = p.ops.clone();
