@@ -8173,6 +8173,18 @@ mod imp {
                                 }
                             }
                         });
+                        // Propagate updated titles/icons to the tab bar so that locale
+                        // changes retitle the tabs (NavMenuPatch::Items is re-derived on
+                        // locale change by the tracked derive() in day-pieces nav.rs).
+                        if let Some(hp) = enclosing_tabs_host(h) {
+                            NAV_TABS.with(|m| {
+                                if let Some(t) = m.borrow_mut().get_mut(&hp) {
+                                    t.titles = items.clone();
+                                    t.icons = icons.clone();
+                                }
+                            });
+                            nav_tabs_sync(hp);
+                        }
                     } else if let Some(NavMenuPatch::Selected(sel)) =
                         patch.downcast_ref::<NavMenuPatch>()
                         && let Some(cv) = h.downcast_ref::<objc2_ui_kit::UICollectionView>()
