@@ -166,6 +166,11 @@ pub fn run(
             artifacts.push(macos::pack(project, target, opts, &dist)?);
         }
         "ios-uikit" => {
+            // Stage vector resources before packing so write_ios_pieces() can populate
+            // Media.xcassets with SVG imagesets (even if `day build` was not run first).
+            if let Err(e) = crate::resources::stage(project, target) {
+                status("Warning", &format!("resource staging skipped ({e})"));
+            }
             artifacts.push(ios::pack(project, target, opts, &dist)?);
         }
         "android-mdc" => {
