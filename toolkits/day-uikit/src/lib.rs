@@ -1918,6 +1918,20 @@ mod imp {
 
         unsafe impl NSObjectProtocol for DayGesture {}
 
+        unsafe impl UIGestureRecognizerDelegate for DayGesture {
+            #[unsafe(method(gestureRecognizer:shouldRecognizeSimultaneouslyWithGestureRecognizer:))]
+            fn should_recognize_simultaneously(
+                &self,
+                _gesture: &UIGestureRecognizer,
+                _other: &UIGestureRecognizer,
+            ) -> bool {
+                matches!(
+                    self.ivars().kind,
+                    day_spec::GestureKind::Drag | day_spec::GestureKind::Pan
+                )
+            }
+        }
+
         impl DayGesture {
             #[unsafe(method(fire:))]
             fn fire(&self, g: &UIGestureRecognizer) {
@@ -9257,6 +9271,7 @@ mod imp {
                             Some(&target),
                             Some(sel!(fire:)),
                         );
+                        pan.setDelegate(Some(ProtocolObject::from_ref(&*target)));
                         Retained::into_super(pan)
                     }
                     day_spec::GestureKind::Pinch => {
@@ -9277,6 +9292,7 @@ mod imp {
                         );
                         pan.setMinimumNumberOfTouches(2);
                         pan.setMaximumNumberOfTouches(2);
+                        pan.setDelegate(Some(ProtocolObject::from_ref(&*target)));
                         Retained::into_super(pan)
                     }
                     day_spec::GestureKind::Hover => {
