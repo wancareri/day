@@ -1930,6 +1930,30 @@ mod imp {
                     day_spec::GestureKind::Drag | day_spec::GestureKind::Pan
                 )
             }
+
+            #[unsafe(method(gestureRecognizerShouldBegin:))]
+            fn should_begin(&self, gesture: &UIGestureRecognizer) -> objc2::runtime::Bool {
+                let obj: &AnyObject = gesture.as_ref();
+                if let Some(pan) = obj.downcast_ref::<UIPanGestureRecognizer>() {
+                    let view = unsafe { gesture.view() };
+                    let mut sup = view.as_deref().and_then(|v| v.superview());
+                    let mut inside_scroll = false;
+                    while let Some(v) = sup {
+                        if v.downcast_ref::<UIScrollView>().is_some() {
+                            inside_scroll = true;
+                            break;
+                        }
+                        sup = v.superview();
+                    }
+                    if inside_scroll {
+                        let vel = unsafe { pan.velocityInView(view.as_deref()) };
+                        if vel.y.abs() > vel.x.abs() {
+                            return objc2::runtime::Bool::NO;
+                        }
+                    }
+                }
+                objc2::runtime::Bool::YES
+            }
         }
 
         impl DayGesture {
