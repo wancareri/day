@@ -9190,7 +9190,15 @@ mod imp {
                 CGSize::new(frame.size.width, frame.size.height),
             );
             let v = h.clone();
-            with_uikit_anim(anim, move || unsafe { v.setFrame(f) });
+            with_uikit_anim(anim, move || unsafe {
+                let t = v.transform();
+                if t.a == 1.0 && t.b == 0.0 && t.c == 0.0 && t.d == 1.0 && t.tx == 0.0 && t.ty == 0.0 {
+                    v.setFrame(f);
+                } else {
+                    v.setBounds(CGRect::new(CGPoint::ZERO, f.size));
+                    v.setCenter(CGPoint::new(f.origin.x + f.size.width / 2.0, f.origin.y + f.size.height / 2.0));
+                }
+            });
         }
 
         fn set_opacity(&mut self, h: &Handle, opacity: f64, anim: Option<&AnimSpec>) {
