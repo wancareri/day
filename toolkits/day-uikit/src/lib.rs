@@ -7593,7 +7593,13 @@ mod imp {
                     let vc = DayCoverVC::new(mtm);
                     unsafe {
                         vc.setView(Some(&outer));
-                        vc.setModalPresentationStyle(UIModalPresentationStyle::FullScreen);
+                        // OverFullScreen, not FullScreen: FullScreen removes the presenting
+                        // view from the window once the transition lands, so a translucent
+                        // cover background (the dim over a live page) showed the window's
+                        // black beneath it instead of the page. OverFullScreen keeps the
+                        // presenting view in place; the default coverVertical transition
+                        // (the slide-up) is unchanged.
+                        vc.setModalPresentationStyle(UIModalPresentationStyle::OverFullScreen);
                     }
                     let handle = view_of(content);
                     COVER_STATE.with(|m| {
@@ -8245,8 +8251,9 @@ mod imp {
                                 if let (Some(c), Some(view)) = (background, vc.view()) {
                                     unsafe { view.setBackgroundColor(Some(&uicolor(*c))) };
                                 }
-                                // Inert under .fullScreen, but honored if the presentation
-                                // style ever becomes a sheet.
+                                // Inert under OverFullScreen (there is no sheet gesture to
+                                // block), but honored if the presentation style ever becomes
+                                // a sheet.
                                 unsafe { vc.setModalInPresentation(*dismiss_disabled) };
                                 cover_present(vc);
                             }
