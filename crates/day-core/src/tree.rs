@@ -2300,6 +2300,10 @@ pub fn scroll_to_target_when_ready(
 ) {
     /// Bounded: a node that never lays out must not post forever.
     const MAX_ATTEMPTS: u32 = 60;
+    /// A frame-ish between attempts. Plain `on_main` posts can ALL drain inside the very turn
+    /// that queued them — before layout has handed the node a frame — so a burst of retries
+    /// burns out before the first real chance. Waiting one frame spaces them across layout.
+    const RETRY_MS: u32 = 16;
     day_reactive::on_main(move || {
         let pending = with_tree(|t| {
             if t.scroll_to_target(node, &target, animated) {
@@ -2309,7 +2313,9 @@ pub fn scroll_to_target_when_ready(
                 && t.node_frame(node).is_none_or(|f| f.size.width <= 0.0 || f.size.height <= 0.0)
         });
         if pending && attempt < MAX_ATTEMPTS {
-            scroll_to_target_when_ready(node, target, animated, attempt + 1);
+            day_reactive::on_main_delayed(RETRY_MS, move || {
+                scroll_to_target_when_ready(node, target, animated, attempt + 1)
+            });
         }
     });
 }
