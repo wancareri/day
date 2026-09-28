@@ -502,15 +502,13 @@ impl<P: Piece> Piece for Scroll<P> {
                 move || sig.get(),
                 move |now, _| {
                     if let Some(t) = now.clone() {
-                        // Deferred one main-loop turn: this watch runs inside the reactive
-                        // flush, BEFORE the turn-end layout that resizes the scroll content —
+                        // Deferred to the main loop: this watch runs inside the reactive
+                        // flush, BEFORE the turn-end layout that sizes the scroll content —
                         // an edge target (Bottom/Trailing) computed now would land on the
-                        // stale content size.
-                        day_reactive::on_main(move || {
-                            day_core::with_tree(|tr| {
-                                tr.scroll_to_target(node, &t, true);
-                            });
-                        });
+                        // stale content size, and a pre-layout frame is zero-sized (the
+                        // platform's scrollRectToVisible then no-ops). The helper retries
+                        // across turns until the node has reported a frame.
+                        day_core::scroll_to_target_when_ready(node, t, true, 0);
                         sig.set(None); // consumed — ready for the next command
                     }
                 },
@@ -521,11 +519,7 @@ impl<P: Piece> Piece for Scroll<P> {
                 move || sig.get(),
                 move |now, _| {
                     if let Some(t) = now.clone() {
-                        day_reactive::on_main(move || {
-                            day_core::with_tree(|tr| {
-                                tr.scroll_to_target(node, &t, false);
-                            });
-                        });
+                        day_core::scroll_to_target_when_ready(node, t, false, 0);
                         sig.set(None); // consumed — ready for the next command
                     }
                 },

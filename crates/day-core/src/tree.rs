@@ -1344,7 +1344,19 @@ impl<B: Toolkit> TreeOps for Tree<B> {
         let Some(h) = n.handle.clone() else {
             return false;
         };
-        let viewport = n.last_native_frame.map(|f| f.size).unwrap_or(Size::ZERO);
+        // Not laid out yet (fresh mount): `last_native_frame` is still None or a
+        // zero rect, which makes the reveal degenerate — `scrollRectToVisible`
+        // silently no-ops and the caller's on_scroll then commits the WRONG
+        // position (the settings pager jumped back to page 0 on accent change).
+        // Report "not applied" so `scroll_to_target_when_ready` can retry once
+        // layout has reported a frame.
+        let Some(frame) = n.last_native_frame else {
+            return false;
+        };
+        let viewport = frame.size;
+        if viewport.width <= 0.0 || viewport.height <= 0.0 {
+            return false;
+        }
         let content = n.scroll_content.unwrap_or(viewport);
         // Compose a content-space rect whose minimal reveal lands on the target
         // (`Toolkit::scroll_to` is scrollRectToVisible semantics on every backend).
@@ -2269,6 +2281,37 @@ pub fn with_tree<R>(f: impl FnOnce(&mut dyn TreeOps) -> R) -> R {
         pump_events();
     }
     r
+}
+
+/// Apply `target` once `node` has been laid out, retrying across main-loop turns.
+///
+/// Watches fire inside the reactive flush, BEFORE the turn-end layout that sizes the
+/// scroll viewport: a target applied then composes a zero-sized rect, the platform's
+/// `scrollRectToVisible` no-ops, and the scroll's own didScroll reports position 0 —
+/// which the caller commits as the settled position (the settings pager jumped back to
+/// page 0 whenever an accent change remounted it). `scroll_to_target` reports those
+/// not-yet-laid-out attempts as `false`; this retries while the node is alive but still
+/// frameless, and gives up on a target that can never apply (not a scroll, node gone).
+pub fn scroll_to_target_when_ready(
+    node: RNode,
+    target: ScrollTarget,
+    animated: bool,
+    attempt: u32,
+) {
+    /// Bounded: a node that never lays out must not post forever.
+    const MAX_ATTEMPTS: u32 = 60;
+    day_reactive::on_main(move || {
+        let pending = with_tree(|t| {
+            if t.scroll_to_target(node, &target, animated) {
+                return false;
+            }
+            t.node_kind(node).is_some()
+                && t.node_frame(node).is_none_or(|f| f.size.width <= 0.0 || f.size.height <= 0.0)
+        });
+        if pending && attempt < MAX_ATTEMPTS {
+            scroll_to_target_when_ready(node, target, animated, attempt + 1);
+        }
+    });
 }
 
 /// Query the active toolkit's support for a capability (docs). Lets app/piece code adapt its own
