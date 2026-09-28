@@ -2656,22 +2656,26 @@ mod imp {
     fn scroll_leaf(content: &UIView) -> bool {
         let mut view = content.retain();
         // Day's wrappers are shallow; a bound keeps a pathological tree from being walked twice
-        // a frame during a resize.
-        for _ in 0..6 {
+        // a frame during a resize. Generous, because a real window chain is a handful of
+        // wrappers deep and running out of bound pads the window by the home inset.
+        for _ in 0..16 {
             let subs = unsafe { view.subviews() };
             let child = if subs.count() == 1 {
                 subs.firstObject()
             } else if subs.count() > 1 {
                 // Multiple children resolve to exactly ONE piece of real content: day
-                // parks zero-size placeholders beside the page (a cover measures 0×0 —
-                // its content lives in its own modal VC), and counting one of those
-                // would fail the chain, pad the root by the safe area and visibly lift
-                // the tab bar. Two non-empty children are a genuine multi-child root —
-                // that still fails, which is the answer the padding wants.
+                // parks zero-size placeholders beside the page (a cover's content view —
+                // detached, but laid out by the tree while its modal VC owns presenting),
+                // and counting one of those would fail the chain, pad the root by the safe
+                // area and visibly lift the tab bar. Two non-empty children are a genuine
+                // multi-child root — that still fails, which is the answer the padding wants.
                 let mut found: Option<Retained<UIView>> = None;
                 for i in 0..subs.count() {
                     let v = subs.objectAtIndex(i);
                     if v.bounds().size.width < 1.0 || v.bounds().size.height < 1.0 {
+                        continue;
+                    }
+                    if COVER_STATE.with(|m| m.borrow().contains_key(&ptr_of(&v))) {
                         continue;
                     }
                     if found.is_some() {
@@ -2705,6 +2709,24 @@ mod imp {
             }
         }
         false
+    }
+
+    /// Schedule the holder's re-ask, whichever level `parent` sits at: whether the window
+    /// pads by the safe area is the ROOT's question, and a change deep below it (an arm
+    /// mounting inside a column, a page swap) is still a change to the chain the walk reads.
+    /// The pass itself runs after the current tree transaction.
+    fn reask_holder(parent: &Retained<UIView>) {
+        let mut cur = Some(parent.clone());
+        for _ in 0..16 {
+            let Some(v) = cur else {
+                return;
+            };
+            if v.downcast_ref::<DayHolderView>().is_some() {
+                v.setNeedsLayout();
+                return;
+            }
+            cur = unsafe { v.superview() };
+        }
     }
 
     struct NavControllerIvars {
@@ -8879,13 +8901,11 @@ mod imp {
 
         fn insert(&mut self, parent: &Handle, child: &Handle, index: usize) {
             // What the root holds decides whether the window pads by the safe area
-            // (`DayHolderView::layoutSubviews`), so a child joining the root re-asks it. Only
+            // (`DayHolderView::layoutSubviews`), so any child joining the tree re-asks it —
+            // an arm mounting inside a column has to reach the holder too, or a padded frame
+            // computed while the chain was still mid-mount sticks for the session. Only
             // scheduled here: the child is attached below, and the pass runs after.
-            if let Some(holder) = unsafe { parent.superview() }
-                && holder.downcast_ref::<DayHolderView>().is_some()
-            {
-                holder.setNeedsLayout();
-            }
+            reask_holder(parent);
             // A NAV_MENU joining the tree: if it lands anywhere inside a `.tabSidebar` host, its
             // rows ARE that host's tabs. This is the first moment the menu has a superview chain
             // to find its host through.
@@ -9081,15 +9101,11 @@ mod imp {
             if !nav_child {
                 unsafe { child.removeFromSuperview() };
             }
-            // Mirror of `insert`: a child leaving the root re-asks the holder whether the
+            // Mirror of `insert`: a child leaving the tree re-asks the holder whether the
             // window pads by the safe area. Without this the padded frame from when the
             // child was there sticks — the tab bar stays lifted after whoever broke the
             // chain has gone.
-            if let Some(holder) = unsafe { parent.superview() }
-                && holder.downcast_ref::<DayHolderView>().is_some()
-            {
-                holder.setNeedsLayout();
-            }
+            reask_holder(parent);
         }
 
         fn move_child(&mut self, parent: &Handle, child: &Handle, _to: usize) {
@@ -10903,7 +10919,16 @@ mod imp {
                             return;
                         };
                         let size = Size::new(inner.size.width, inner.size.height);
+                        let holder = root_view.superview();
                         ready(backend, view_of(root_view), size);
+                        // The launch frame above was computed against a holder whose root
+                        // had just been framed EMPTY, so it took the padded branch, and the
+                        // mount that `ready` kicked off is incremental — a pass in the
+                        // middle of it sees a chain that cannot bleed yet. Re-ask now that
+                        // the mount wave has run: this is the pass that sets the real frame.
+                        if let Some(holder) = holder {
+                            holder.setNeedsLayout();
+                        }
                         // Cold launch via deep link or quick action (docs/deep-links.md): both
                         // ride the connection options; `request_route` buffers until the mount
                         // that `ready` just kicked off completes.
@@ -10933,10 +10958,15 @@ mod imp {
                     });
                     // Keep the adopted root alive for the entry's lifetime; the tree holds the
                     // other retain through `Toolkit::adopt`.
+                    let holder = root_view.superview();
                     if !day_core::finish_window_open(node, raw, size) {
                         // Closed before the scene connected — drop the scene again.
                         SCENES.with(|s| s.borrow_mut().retain(|e| e.node != Some(node)));
                         request_scene_destruction(mtm, session);
+                    } else if let Some(holder) = holder {
+                        // Same post-mount re-ask as the primary: the launch frame was the
+                        // empty holder's padded answer.
+                        holder.setNeedsLayout();
                     }
                 });
             }
