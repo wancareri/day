@@ -2659,10 +2659,31 @@ mod imp {
         // a frame during a resize.
         for _ in 0..6 {
             let subs = unsafe { view.subviews() };
-            if subs.count() != 1 {
-                return false;
-            }
-            let Some(child) = subs.firstObject() else {
+            let child = if subs.count() == 1 {
+                subs.firstObject()
+            } else if subs.count() > 1 {
+                // Multiple children resolve to exactly ONE piece of real content: day
+                // parks zero-size placeholders beside the page (a cover measures 0×0 —
+                // its content lives in its own modal VC), and counting one of those
+                // would fail the chain, pad the root by the safe area and visibly lift
+                // the tab bar. Two non-empty children are a genuine multi-child root —
+                // that still fails, which is the answer the padding wants.
+                let mut found: Option<Retained<UIView>> = None;
+                for i in 0..subs.count() {
+                    let v = subs.objectAtIndex(i);
+                    if v.bounds().size.width < 1.0 || v.bounds().size.height < 1.0 {
+                        continue;
+                    }
+                    if found.is_some() {
+                        return false;
+                    }
+                    found = Some(v);
+                }
+                found
+            } else {
+                None
+            };
+            let Some(child) = child else {
                 return false;
             };
             // A view controller's view answers to its controller: a nav or split host here
@@ -9059,6 +9080,15 @@ mod imp {
             }
             if !nav_child {
                 unsafe { child.removeFromSuperview() };
+            }
+            // Mirror of `insert`: a child leaving the root re-asks the holder whether the
+            // window pads by the safe area. Without this the padded frame from when the
+            // child was there sticks — the tab bar stays lifted after whoever broke the
+            // chain has gone.
+            if let Some(holder) = unsafe { parent.superview() }
+                && holder.downcast_ref::<DayHolderView>().is_some()
+            {
+                holder.setNeedsLayout();
             }
         }
 
