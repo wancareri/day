@@ -277,7 +277,10 @@ impl<C: PieceSeq> Piece for Row<C> {
                 // tall as whatever pane it happens to sit in.
                 let strip = cx.native(
                     kinds::SCROLL,
-                    &day_spec::props::ScrollProps { horizontal: true },
+                    &day_spec::props::ScrollProps {
+                        horizontal: true,
+                        paging: false,
+                    },
                     Rc::new(ScrollLayout {
                         axis: Axis::Horizontal,
                     }),
@@ -416,14 +419,18 @@ impl<C: PieceSeq> Piece for GridRow<C> {
 pub struct Scroll<P: Piece> {
     child: P,
     axis: Axis,
+    paging: bool,
     target: Option<Signal<Option<day_core::ScrollTarget>>>,
+    jump: Option<Signal<Option<day_core::ScrollTarget>>>,
 }
 
 pub fn scroll<P: Piece>(child: P) -> Scroll<P> {
     Scroll {
         child,
         axis: Axis::Vertical,
+        paging: false,
         target: None,
+        jump: None,
     }
 }
 
@@ -453,6 +460,22 @@ impl<P: Piece> Scroll<P> {
         self.target = Some(sig);
         self
     }
+
+    /// Snap the viewport page-by-page while the user drags (native paging: the content
+    /// follows the finger and settles on the nearest page edge, with UIKit's velocity
+    /// throw). The content is laid out in one line whose slots are the viewport's own
+    /// width — a horizontal strip of full-width pages for a pager.
+    pub fn paging(mut self, on: bool) -> Self {
+        self.paging = on;
+        self
+    }
+
+    /// The same write-and-forget targeting as [`Scroll::scroll_target`], but WITHOUT the
+    /// animation — a restored position lands instantly on mount instead of sliding there.
+    pub fn scroll_jump(mut self, sig: Signal<Option<day_core::ScrollTarget>>) -> Self {
+        self.jump = Some(sig);
+        self
+    }
 }
 
 impl<P: Piece> Piece for Scroll<P> {
@@ -461,6 +484,7 @@ impl<P: Piece> Piece for Scroll<P> {
             kinds::SCROLL,
             &day_spec::props::ScrollProps {
                 horizontal: matches!(self.axis, Axis::Horizontal),
+                paging: self.paging,
             },
             Rc::new(ScrollLayout { axis: self.axis }),
             Flex {
@@ -485,6 +509,21 @@ impl<P: Piece> Piece for Scroll<P> {
                         day_reactive::on_main(move || {
                             day_core::with_tree(|tr| {
                                 tr.scroll_to_target(node, &t, true);
+                            });
+                        });
+                        sig.set(None); // consumed — ready for the next command
+                    }
+                },
+            );
+        }
+        if let Some(sig) = self.jump {
+            watch(
+                move || sig.get(),
+                move |now, _| {
+                    if let Some(t) = now.clone() {
+                        day_reactive::on_main(move || {
+                            day_core::with_tree(|tr| {
+                                tr.scroll_to_target(node, &t, false);
                             });
                         });
                         sig.set(None); // consumed — ready for the next command
@@ -604,6 +643,8 @@ pub trait ScrollBuilder: Sized {
     fn horizontal(self) -> Self;
     fn axis(self, axis: Axis) -> Self;
     fn scroll_target(self, sig: Signal<Option<day_core::ScrollTarget>>) -> Self;
+    fn paging(self, on: bool) -> Self;
+    fn scroll_jump(self, sig: Signal<Option<day_core::ScrollTarget>>) -> Self;
 }
 
 impl<P: Piece> ScrollBuilder for Scroll<P> {
@@ -616,6 +657,12 @@ impl<P: Piece> ScrollBuilder for Scroll<P> {
     fn scroll_target(self, sig: Signal<Option<day_core::ScrollTarget>>) -> Self {
         Scroll::scroll_target(self, sig)
     }
+    fn paging(self, on: bool) -> Self {
+        Scroll::paging(self, on)
+    }
+    fn scroll_jump(self, sig: Signal<Option<day_core::ScrollTarget>>) -> Self {
+        Scroll::scroll_jump(self, sig)
+    }
 }
 
 impl<Inner: ScrollBuilder + Piece> ScrollBuilder for Decorated<Inner> {
@@ -627,6 +674,12 @@ impl<Inner: ScrollBuilder + Piece> ScrollBuilder for Decorated<Inner> {
     }
     fn scroll_target(self, sig: Signal<Option<day_core::ScrollTarget>>) -> Self {
         self.map_inner(|inner_piece| inner_piece.scroll_target(sig))
+    }
+    fn paging(self, on: bool) -> Self {
+        self.map_inner(|inner_piece| inner_piece.paging(on))
+    }
+    fn scroll_jump(self, sig: Signal<Option<day_core::ScrollTarget>>) -> Self {
+        self.map_inner(|inner_piece| inner_piece.scroll_jump(sig))
     }
 }
 

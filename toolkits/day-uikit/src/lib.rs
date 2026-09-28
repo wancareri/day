@@ -161,6 +161,11 @@ mod imp {
         /// Keeps each view's gesture targets alive + records which are attached (idempotent).
         static GESTURES: RefCell<HashMap<usize, Vec<Retained<DayGesture>>>> =
             RefCell::new(HashMap::new());
+        /// Each scroll view's offset-reporting delegate, keyed by view address: the UIKit
+        /// delegate slot is weak, so the strong map is what keeps the emitter alive for the
+        /// view's whole lifetime (removed in `release`, like `GESTURES`).
+        static SCROLL_EMITTERS: RefCell<HashMap<usize, Retained<DayScrollEmit>>> =
+            RefCell::new(HashMap::new());
         /// Per-view context-menu interaction + its delegate (kept alive; replaced on
         /// reconfigure, swept on release via `day_spec::sidetable`). The teardown detaches
         /// the interaction from its view first, so a recycled address can never serve a dead
@@ -812,6 +817,48 @@ mod imp {
     impl DayTarget {
         fn new(mtm: MainThreadMarker, node: NodeId) -> Retained<Self> {
             let this = Self::alloc(mtm).set_ivars(TargetIvars { node });
+            unsafe { msg_send![super(this), init] }
+        }
+    }
+
+    // ── A scroll view's own delegate: content-offset reporting ─────────────────────────
+    //
+    // `Event::ScrollChanged` for plain scrolls (a paging strip reads the page under the
+    // finger from it). One emitter per scroll view, kept strong in `SCROLL_EMITTERS` the
+    // way `GESTURES` keeps recognizers: UIScrollView holds its delegate WEAKLY, so
+    // without the table entry the emitter would die as realize returns and the delegate
+    // go dead. Realize inserts, release removes.
+
+    struct ScrollEmitIvars {
+        node: NodeId,
+    }
+
+    define_class!(
+        #[unsafe(super(NSObject))]
+        #[thread_kind = MainThreadOnly]
+        #[name = "DayUIKitScrollEmit"]
+        #[ivars = ScrollEmitIvars]
+        struct DayScrollEmit;
+
+        unsafe impl NSObjectProtocol for DayScrollEmit {}
+
+        unsafe impl UIScrollViewDelegate for DayScrollEmit {
+            #[unsafe(method(scrollViewDidScroll:))]
+            fn scroll_view_did_scroll(&self, _scroll_view: &UIScrollView) {
+                day_spec::ffi_guard::contain((), || {
+                    let off = unsafe { _scroll_view.contentOffset() };
+                    emit(
+                        self.ivars().node,
+                        Event::ScrollChanged(day_spec::Point::new(off.x, off.y)),
+                    );
+                });
+            }
+        }
+    );
+
+    impl DayScrollEmit {
+        fn new(mtm: MainThreadMarker, node: NodeId) -> Retained<Self> {
+            let this = Self::alloc(mtm).set_ivars(ScrollEmitIvars { node });
             unsafe { msg_send![super(this), init] }
         }
     }
@@ -7881,7 +7928,20 @@ mod imp {
                 }
                 Some(Builtin::Scroll) => {
                     let sv = unsafe { UIScrollView::new(mtm) };
-                    view_of(sv)
+                    // Page-snapping (`.paging(true)`): the viewport settles page-edge by
+                    // page-edge while the finger drags, with UIKit's own velocity throw.
+                    if let Some(p) = day_spec::props_of::<ScrollProps>(kind, "uikit", props) {
+                        if p.paging {
+                            unsafe { sv.setPagingEnabled(true) };
+                        }
+                    }
+                    // Offset reporting (`Event::ScrollChanged`, `.on_scroll`): the plain
+                    // scroll view has no delegate of its own, so day takes it.
+                    let emitter = DayScrollEmit::new(mtm, id);
+                    unsafe { sv.setDelegate(Some(ProtocolObject::from_ref(&*emitter))) };
+                    let view = view_of(sv);
+                    SCROLL_EMITTERS.with(|m| m.borrow_mut().insert(ptr_of(&view), emitter));
+                    view
                 }
                 Some(Builtin::Label) => {
                     let Some(p) = day_spec::props_of::<LabelProps>(kind, "uikit", props) else {
@@ -8782,6 +8842,9 @@ mod imp {
                 m.borrow_mut().remove(&ptr_of(&h));
             });
             GESTURES.with(|m| {
+                m.borrow_mut().remove(&ptr_of(&h));
+            });
+            SCROLL_EMITTERS.with(|m| {
                 m.borrow_mut().remove(&ptr_of(&h));
             });
             // ONE sweep clears every `day_spec::sidetable::SideTable` on this thread —

@@ -644,6 +644,20 @@ fn op_on_drag(f: impl Fn(Drag) + 'static) -> impl FnOnce(Build) -> Build {
     }
 }
 
+fn op_on_scroll(f: impl Fn(day_spec::Point) + 'static) -> impl FnOnce(Build) -> Build {
+    move |inner| {
+        Box::new(move |cx| {
+            let n = inner(cx);
+            cx.on(n, move |ev| {
+                if let Event::ScrollChanged(p) = ev {
+                    f(*p);
+                }
+            });
+            n
+        })
+    }
+}
+
 fn op_on_pinch(f: impl Fn(Pinch) + 'static) -> impl FnOnce(Build) -> Build {
     move |inner| {
         Box::new(move |cx| {
@@ -996,6 +1010,12 @@ impl<P: Piece> Decorated<P> {
     pub fn on_drag(self, f: impl Fn(Drag) + 'static) -> Self {
         self.push(op_on_drag(f))
     }
+    /// A scrolling viewport's content offset changed: `p` is the current content offset
+    /// in content coordinates. Fires on every offset change — a paging strip reports the
+    /// whole drag, so `p.x / page_width` rounds to the page under the finger.
+    pub fn on_scroll(self, f: impl Fn(day_spec::Point) + 'static) -> Self {
+        self.push(op_on_scroll(f))
+    }
     pub fn on_pinch(self, f: impl Fn(Pinch) + 'static) -> Self {
         self.push(op_on_pinch(f))
     }
@@ -1298,6 +1318,13 @@ pub trait Decorate: Piece + Sized {
     /// Fire on each phase of a drag over this piece.
     fn on_drag(self, f: impl Fn(Drag) + 'static) -> Decorated<Self> {
         Decorated::new(self).on_drag(f)
+    }
+
+    /// Fire whenever a scrolling viewport's content offset changes: `p` is the current
+    /// content offset. No gesture recognizer is claimed — the scroll view's own pan
+    /// delivers it, so this works on plain scrolls, filmstrips and paging strips alike.
+    fn on_scroll(self, f: impl Fn(day_spec::Point) + 'static) -> Decorated<Self> {
+        Decorated::new(self).on_scroll(f)
     }
 
     /// Fire on each phase of a pinch/magnify over this piece (docs/canvas.md "Zoom and
