@@ -52,10 +52,14 @@ zstack((
 ```
 
 - `Some(r)` builds `build(&r)` under the cover and presents it (slide-up where the platform
-  animates modals). `None` dismisses it. Switching directly from `Some(a)` to `Some(b)`
+  animates modals; ios-uikit instead presents unanimated and runs a manual entrance — the
+  dim fades in place while the sheet alone slides up, so the translucent panel never sweeps
+  across the page like a window). `None` dismisses it (ios-uikit mirrors the entrance on the
+  way out, then dismisses unanimated). Switching directly from `Some(a)` to `Some(b)`
   swaps the content and re-presents.
 - `.background(f)` paints the surface color edge-to-edge (under the status bar and home
-  indicator) while the content itself is laid out inside the safe area. Without it the
+  indicator) while the content itself is laid out inside the safe area (ios-uikit drops the
+  bottom inset, so nothing floats above the home indicator). Without it the
   platform's default surface color shows in the unsafe regions.
 - The builder runs inside the presented content's scope: state it restores, signals it
   creates, and cleanups it registers (e.g. a save-on-exit) live exactly as long as the

@@ -2566,7 +2566,18 @@ mod imp {
                     let subs = unsafe { self.subviews() };
                     let content = subs.firstObject();
                     let full_bleed = content.as_ref().is_some_and(|c| scroll_leaf(c));
-                    let frame = content_frame(bounds, insets, full_bleed);
+                    // A cover's dim paints edge to edge already (the VC's own background), so
+                    // its bottom inset is the one that would actually show — it floats the
+                    // sheet above the home indicator with a strip of dim beneath it. Everything
+                    // else (top pinning, a scroll root's full bleed) follows the page rules.
+                    let is_cover = content.as_ref().is_some_and(|c| {
+                        COVER_STATE.with(|m| m.borrow().contains_key(&ptr_of(c)))
+                    });
+                    let frame = if is_cover {
+                        content_frame(bounds, UIEdgeInsets { bottom: 0.0, ..insets }, full_bleed)
+                    } else {
+                        content_frame(bounds, insets, full_bleed)
+                    };
                     if let Some(content) = content {
                         unsafe { content.setFrame(frame) };
                         if *DIAG_NAV {
@@ -4343,6 +4354,48 @@ mod imp {
         }
     }
 
+    /// How far below its final spot a cover's sheet starts, and how long the manual
+    /// entrance/exit runs. The dim rides `alpha` on the cover's own view; only the content
+    /// (sheet + close affordance) translates, so the translucent panel fades in place
+    /// instead of sweeping across the page like a window — the platform's coverVertical
+    /// slide replaced by an unanimated present/dismiss plus this.
+    const COVER_SHEET_RISE: CGFloat = 36.0;
+    const COVER_SHEET_IN: f64 = 0.28;
+    const COVER_SHEET_OUT: f64 = 0.24;
+
+    fn cover_slide(ty: CGFloat) -> CGAffineTransform {
+        CGAffineTransform {
+            a: 1.0,
+            b: 0.0,
+            c: 0.0,
+            d: 1.0,
+            tx: 0.0,
+            ty,
+        }
+    }
+
+    /// The cover's entrance: run right after the non-animated present, fading the dim in
+    /// place while the sheet slides up to meet it.
+    fn cover_entrance(view: Retained<UIView>, sheet: Retained<UIView>) {
+        let animations = {
+            let (view, sheet) = (view, sheet);
+            block2::RcBlock::new(move || unsafe {
+                view.setAlpha(1.0);
+                sheet.setTransform(cover_slide(0.0));
+            })
+        };
+        unsafe {
+            UIView::animateWithDuration_delay_options_animations_completion(
+                COVER_SHEET_IN,
+                0.0,
+                uiview_anim_options(Curve::EaseOut) | UIViewAnimationOptions::BeginFromCurrentState,
+                &animations,
+                None,
+                mtm(),
+            );
+        }
+    }
+
     /// Queue the cover's presentation behind any in-flight modal transition (§dialogs FIFO).
     fn cover_present(vc: Retained<DayCoverVC>) {
         modal_enqueue(ModalOp::Cover(vc, 0));
@@ -4371,8 +4424,41 @@ mod imp {
                     modal_end_transition();
                 })
             };
-            unsafe {
-                presenting.dismissViewControllerAnimated_completion(true, Some(&completion));
+            // Manual exit (the mirror of the entrance in the Cover op): fade the dim in
+            // place and slide the sheet down, THEN dismiss unanimated — reversing the
+            // platform's slide would sweep the translucent panel back across the page like
+            // a window. The dismissal itself stays unanimated, so the completion above is
+            // still what reports `CoverHidden`.
+            let view = vc.view();
+            let sheet = view
+                .as_ref()
+                .and_then(|v| unsafe { v.subviews() }.firstObject());
+            match (view, sheet) {
+                (Some(view), Some(sheet)) => {
+                    let dismiss =
+                        block2::RcBlock::new(move |_finished: objc2::runtime::Bool| unsafe {
+                            presenting
+                                .dismissViewControllerAnimated_completion(false, Some(&completion));
+                        });
+                    let animations = block2::RcBlock::new(move || unsafe {
+                        view.setAlpha(0.0);
+                        sheet.setTransform(cover_slide(COVER_SHEET_RISE));
+                    });
+                    unsafe {
+                        UIView::animateWithDuration_delay_options_animations_completion(
+                            COVER_SHEET_OUT,
+                            0.0,
+                            uiview_anim_options(Curve::EaseOut)
+                                | UIViewAnimationOptions::BeginFromCurrentState,
+                            &animations,
+                            Some(&dismiss),
+                            mtm(),
+                        );
+                    }
+                }
+                _ => unsafe {
+                    presenting.dismissViewControllerAnimated_completion(true, Some(&completion));
+                },
             }
             let mtm = objc2::MainThreadMarker::new().expect("cover ops run on main");
             let vc_probe = dispatch2::MainThreadBound::new(vc.clone(), mtm);
@@ -7693,8 +7779,10 @@ mod imp {
                         // view from the window once the transition lands, so a translucent
                         // cover background (the dim over a live page) showed the window's
                         // black beneath it instead of the page. OverFullScreen keeps the
-                        // presenting view in place; the default coverVertical transition
-                        // (the slide-up) is unchanged.
+                        // presenting view in place. Presentation itself is UNANIMATED — the
+                        // entrance and exit are the manual fade-and-slide in the Cover op
+                        // and `cover_dismiss`, so the dim fades in place rather than
+                        // sweeping across the page like a window.
                         vc.setModalPresentationStyle(UIModalPresentationStyle::OverFullScreen);
                     }
                     let handle = view_of(content);
@@ -10535,9 +10623,33 @@ mod imp {
                     return;
                 };
                 modal_begin_transition();
-                let completion = block2::RcBlock::new(modal_end_transition);
+                // Unanimated present + a manual fade-and-slide (see `cover_entrance`): the
+                // platform slide-up dragged the WHOLE translucent cover — dim included —
+                // across the page like a window. The start state is set before the present
+                // so the first frame is already the hidden one; the completion (UIKit calls
+                // it once the non-animated present lands) fades the dim in place while the
+                // sheet slides up to meet it.
+                let view = vc.view();
+                let sheet = view
+                    .as_ref()
+                    .and_then(|v| unsafe { v.subviews() }.firstObject());
+                if let Some(v) = view.as_ref() {
+                    unsafe { v.setAlpha(0.0) };
+                }
+                if let Some(s) = sheet.as_ref() {
+                    unsafe { s.setTransform(cover_slide(COVER_SHEET_RISE)) };
+                }
+                let completion = {
+                    let (view, sheet) = (view.clone(), sheet.clone());
+                    block2::RcBlock::new(move || {
+                        modal_end_transition();
+                        if let (Some(view), Some(sheet)) = (view.as_ref(), sheet.as_ref()) {
+                            cover_entrance(view.clone(), sheet.clone());
+                        }
+                    })
+                };
                 unsafe {
-                    top.presentViewController_animated_completion(&vc, true, Some(&completion));
+                    top.presentViewController_animated_completion(&vc, false, Some(&completion));
                 }
             }
             ModalOp::Run(f) => {
