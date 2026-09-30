@@ -2310,7 +2310,8 @@ pub fn scroll_to_target_when_ready(
                 return false;
             }
             t.node_kind(node).is_some()
-                && t.node_frame(node).is_none_or(|f| f.size.width <= 0.0 || f.size.height <= 0.0)
+                && t.node_frame(node)
+                    .is_none_or(|f| f.size.width <= 0.0 || f.size.height <= 0.0)
         });
         if pending && attempt < MAX_ATTEMPTS {
             day_reactive::on_main_delayed(RETRY_MS, move || {

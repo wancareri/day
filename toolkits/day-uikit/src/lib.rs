@@ -56,11 +56,11 @@ mod imp {
     use objc2::Message as _;
     use objc2_ui_kit::NSIndexPathUIKitAdditions as _;
     use objc2_ui_kit::NSObjectUIAccessibility;
-    use objc2_ui_kit::UITextInputTraits;
     use objc2_ui_kit::UIApplicationMain;
     use objc2_ui_kit::UINavigationControllerDelegate;
     use objc2_ui_kit::UISearchResultsUpdating;
     use objc2_ui_kit::UISplitViewControllerDelegate;
+    use objc2_ui_kit::UITextInputTraits;
     use objc2_ui_kit::UITextViewDelegate;
     use objc2_ui_kit::{
         UIAction, UIAxis, UIContextMenuConfiguration, UIContextMenuInteraction,
@@ -6754,6 +6754,12 @@ mod imp {
         };
         let animations = block2::RcBlock::new(body);
         let delay = a.delay_secs().max(0.0);
+        // Retargeting: a second animation on the same property starts from the current
+        // PRESENTATION value instead of snapping to the interrupted one's model value —
+        // a fast status flip otherwise teleports the status capsule. (Subview layout rides
+        // the block via an explicit layoutIfNeeded in set_frame, not LayoutSubviews: that
+        // option would also capture pending layout inside every opacity/transform batch.)
+        let extra = UIViewAnimationOptions::BeginFromCurrentState;
         unsafe {
             match a.curve {
                 Curve::Spring { damping, .. } => {
@@ -6763,7 +6769,7 @@ mod imp {
                         delay,
                         damping.clamp(0.05, 1.0),
                         0.0,
-                        UIViewAnimationOptions(0),
+                        extra,
                         &animations,
                         None,
                         mtm(),
@@ -6773,7 +6779,7 @@ mod imp {
                     UIView::animateWithDuration_delay_options_animations_completion(
                         a.duration_secs().max(0.01),
                         delay,
-                        uiview_anim_options(curve),
+                        uiview_anim_options(curve) | extra,
                         &animations,
                         None,
                         mtm(),
@@ -9306,13 +9312,32 @@ mod imp {
                 CGSize::new(frame.size.width, frame.size.height),
             );
             let v = h.clone();
+            let animated = anim.is_some();
             with_uikit_anim(anim, move || unsafe {
                 let t = v.transform();
-                if t.a == 1.0 && t.b == 0.0 && t.c == 0.0 && t.d == 1.0 && t.tx == 0.0 && t.ty == 0.0 {
+                if t.a == 1.0
+                    && t.b == 0.0
+                    && t.c == 0.0
+                    && t.d == 1.0
+                    && t.tx == 0.0
+                    && t.ty == 0.0
+                {
                     v.setFrame(f);
                 } else {
                     v.setBounds(CGRect::new(CGPoint::ZERO, f.size));
-                    v.setCenter(CGPoint::new(f.origin.x + f.size.width / 2.0, f.origin.y + f.size.height / 2.0));
+                    v.setCenter(CGPoint::new(
+                        f.origin.x + f.size.width / 2.0,
+                        f.origin.y + f.size.height / 2.0,
+                    ));
+                }
+                // Animated only: subviews sized by autoresizing (the frosted blur behind
+                // the status capsule) are laid out HERE, inside the animation block, so
+                // their frame change animates with the parent instead of snapping to the
+                // model value at the run-loop commit. The un-animated path keeps today's
+                // behavior — layout lands at the next layout pass.
+                if animated {
+                    v.setNeedsLayout();
+                    v.layoutIfNeeded();
                 }
             });
         }

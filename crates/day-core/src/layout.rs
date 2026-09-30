@@ -270,18 +270,26 @@ pub(crate) fn place_node<B: Toolkit>(
         .unwrap_or(false);
     let child_offset = if has_handle {
         if !is_root && !native_frame {
-            let changed = tree
+            let (changed, fresh) = tree
                 .node(node)
                 .map(|n| {
-                    n.last_native_frame
-                        .map(|f| !f.approx_eq(&abs, 0.25))
-                        .unwrap_or(true)
+                    (
+                        n.last_native_frame
+                            .map(|f| !f.approx_eq(&abs, 0.25))
+                            .unwrap_or(true),
+                        n.last_native_frame.is_none(),
+                    )
                 })
-                .unwrap_or(false);
+                .unwrap_or((false, false));
             if changed {
                 let h = tree.node(node).and_then(|n| n.handle.clone());
                 if let Some(h) = h {
-                    let anim = tree.resolve_anim(node);
+                    // First placement only: the view was just realized (`when()` mount,
+                    // fresh list cell, remounted glyph). Its model frame starts at
+                    // CGRectZero, so animating that grows the view out of its corner —
+                    // the "grow-in" jerk. A mount's motion is opacity (the fade-in
+                    // batch), not geometry; only a RE-placement of a live view animates.
+                    let anim = if fresh { None } else { tree.resolve_anim(node) };
                     tree.toolkit.set_frame(&h, abs, anim.as_ref());
                 }
                 if tree
