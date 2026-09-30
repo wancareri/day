@@ -167,6 +167,75 @@ fn with_animation_from_a_button_action_threads_intent() {
 }
 
 #[test]
+fn with_animation_carries_intent_into_set_frame_across_a_child_unmount() {
+    // The status-capsule collapse: a conditional child unmounts under `with_animation`, so the
+    // container's FRAME — not a property patch — is what must carry the AnimSpec, or the
+    // capsule snaps to its final width instead of shrinking.
+    let show = Signal::new(true);
+    let probe = boot(move || {
+        row((
+            label("i"),
+            when(move || show.get(), || label("Obnovleno").width(90.0)),
+        ))
+        .background(Color::rgb(0.0, 0.0, 0.0))
+        .any()
+    });
+    flush_sync();
+
+    let (h, w) = layer(&probe, |w| w.background.is_some());
+    let wide = w.frame.size.width;
+    assert!(w.last_anim.is_none(), "boot carries no intent");
+
+    with_animation(Animation::ease_out(220), move || show.set(false));
+    flush_sync();
+
+    let w = probe.widget(h);
+    assert!(
+        w.frame.size.width < wide - 0.25,
+        "the capsule actually shrank: {wide} -> {}",
+        w.frame.size.width
+    );
+    let a = w
+        .last_anim
+        .expect("ambient animation must reach set_frame when a child unmounts");
+    assert_eq!(a.duration_ms, 220);
+    assert_eq!(a.curve, Curve::EaseOut);
+}
+
+#[test]
+fn with_animation_carries_intent_into_set_frame_across_a_child_mount() {
+    // The mirror path (arrival): the child mounts and the container grows under the same batch.
+    let show = Signal::new(false);
+    let probe = boot(move || {
+        row((
+            label("i"),
+            when(move || show.get(), || label("Obnovleno").width(90.0)),
+        ))
+        .background(Color::rgb(0.0, 0.0, 0.0))
+        .any()
+    });
+    flush_sync();
+
+    let (h, w) = layer(&probe, |w| w.background.is_some());
+    let narrow = w.frame.size.width;
+    assert!(w.last_anim.is_none(), "boot carries no intent");
+
+    with_animation(Animation::ease_out(220), move || show.set(true));
+    flush_sync();
+
+    let w = probe.widget(h);
+    assert!(
+        w.frame.size.width > narrow + 0.25,
+        "the capsule actually grew: {narrow} -> {}",
+        w.frame.size.width
+    );
+    let a = w
+        .last_anim
+        .expect("ambient animation must reach set_frame when a child mounts");
+    assert_eq!(a.duration_ms, 220);
+}
+
+#[test]
 fn curve_and_spring_math_is_well_formed() {
     // Easing endpoints.
     assert_eq!(Curve::Linear.fraction(0.0, 1.0), 0.0);
