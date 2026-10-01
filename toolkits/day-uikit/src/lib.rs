@@ -4125,6 +4125,10 @@ mod imp {
     struct CoverState {
         vc: Retained<DayCoverVC>,
         node: NodeId,
+        /// The spec's dim color for this cover: stashed so the entrance can fade
+        /// it in and the dismissal fade it out on their own track, never riding
+        /// the sheet's travel.
+        dim: Option<day_spec::Color>,
     }
 
     /// Day `Edges` bits → `UIRectEdge` (leading/trailing map to left/right).
@@ -4373,8 +4377,9 @@ mod imp {
     /// how long the exit takes. The exit is ONE motion from wherever the sheet currently
     /// sits: it travels all the way down past the bottom edge while the dim fades out
     /// alongside it, and the dismissal lands unanimated — the sheet never jumps up, never
-    /// pauses, never vanishes halfway down. The dim rides `alpha` on the cover's own view;
-    /// only the content (sheet + close affordance) translates. Neither direction sweeps
+    /// pauses, never vanishes halfway down. The dim is this view's own background color
+    /// (edge to edge): it only ever changes opacity in place, never translates; only the
+    /// content (sheet + close affordance) does. Neither direction sweeps
     /// the translucent panel across the page like a window: the platform's coverVertical
     /// slide is replaced by an unanimated present/dismiss plus these.
     const COVER_SHEET_RISE: CGFloat = 36.0;
@@ -4392,14 +4397,20 @@ mod imp {
         }
     }
 
-    /// The cover's entrance: run right after the non-animated present, fading the dim in
-    /// place while the sheet slides up to meet it.
+    /// The cover's entrance: run right after the non-animated present. The sheet is
+    /// already visible and rises from below its spot; the dim — the cover view's own
+    /// background — washes in on its own track behind it. Two independent properties:
+    /// the sheet never fades (it is simply there, moving), the dim never travels (it
+    /// only gains opacity, in place).
     fn cover_entrance(view: Retained<UIView>, sheet: Retained<UIView>) {
+        let dim = COVER_STATE.with(|m| m.borrow().get(&ptr_of(&sheet)).and_then(|s| s.dim));
         let animations = {
             let (view, sheet) = (view, sheet);
             block2::RcBlock::new(move || unsafe {
-                view.setAlpha(1.0);
                 sheet.setTransform(cover_slide(0.0));
+                if let Some(c) = dim {
+                    view.setBackgroundColor(Some(&uicolor(c)));
+                }
             })
         };
         unsafe {
@@ -4463,15 +4474,16 @@ mod imp {
                             presenting
                                 .dismissViewControllerAnimated_completion(false, Some(&completion));
                         });
-                    // ONE animation from wherever the sheet currently sits: it travels
-                    // all the way down while the dim fades out alongside it, and the
-                    // dismissal then lands unanimated. EaseOut sets off right at the
-                    // sheet's place (nothing coiling up first) and settles the travel
-                    // at the very end, so the motion is a single downward glide.
+                    // ONE animation from wherever the sheet currently sits: the sheet
+                    // travels all the way down, fully opaque and simply moving, while the
+                    // dim — this view's own background, a fixed edge-to-edge layer —
+                    // washes out in place on its own track. The dismissal then lands
+                    // unanimated with the sheet past the edge and the dim already clear,
+                    // so the sheet glides down instead of fading away mid-flight.
                     let animations = {
                         let (view, sheet) = (view, sheet);
                         block2::RcBlock::new(move || unsafe {
-                            view.setAlpha(0.0);
+                            view.setBackgroundColor(Some(&UIColor::clearColor()));
                             sheet.setTransform(cover_slide(drop));
                         })
                     };
@@ -7818,8 +7830,14 @@ mod imp {
                     }
                     let handle = view_of(content);
                     COVER_STATE.with(|m| {
-                        m.borrow_mut()
-                            .insert(ptr_of(&handle), CoverState { vc, node: id })
+                        m.borrow_mut().insert(
+                            ptr_of(&handle),
+                            CoverState {
+                                vc,
+                                node: id,
+                                dim: None,
+                            },
+                        )
                     });
                     // The content view's frame is native-owned (the cover VC lays it out).
                     NAV_PAGES.with(|set| set.borrow_mut().insert(ptr_of(&handle)));
@@ -8476,6 +8494,11 @@ mod imp {
                                 background,
                                 dismiss_disabled,
                             } => {
+                                COVER_STATE.with(|m| {
+                                    if let Some(s) = m.borrow_mut().get_mut(&ptr_of(h)) {
+                                        s.dim = *background;
+                                    }
+                                });
                                 if let (Some(c), Some(view)) = (background, vc.view()) {
                                     unsafe { view.setBackgroundColor(Some(&uicolor(*c))) };
                                 }
@@ -10666,18 +10689,19 @@ mod imp {
                     return;
                 };
                 modal_begin_transition();
-                // Unanimated present + a manual fade-and-slide (see `cover_entrance`): the
+                // Unanimated present + a manual entrance (see `cover_entrance`): the
                 // platform slide-up dragged the WHOLE translucent cover — dim included —
                 // across the page like a window. The start state is set before the present
-                // so the first frame is already the hidden one; the completion (UIKit calls
-                // it once the non-animated present lands) fades the dim in place while the
-                // sheet slides up to meet it.
+                // so the first frame is already the hidden one: the sheet waits below its
+                // spot and the dim (this view's own background, laid edge to edge) starts
+                // fully transparent — the entrance raises the sheet and washes the dim in
+                // on its own, so the sheet never fades and the dim never travels.
                 let view = vc.view();
                 let sheet = view
                     .as_ref()
                     .and_then(|v| unsafe { v.subviews() }.firstObject());
                 if let Some(v) = view.as_ref() {
-                    unsafe { v.setAlpha(0.0) };
+                    unsafe { v.setBackgroundColor(Some(&UIColor::clearColor())) };
                 }
                 if let Some(s) = sheet.as_ref() {
                     unsafe { s.setTransform(cover_slide(COVER_SHEET_RISE)) };
