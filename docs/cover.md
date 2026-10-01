@@ -55,7 +55,8 @@ zstack((
   animates modals; ios-uikit instead presents unanimated and runs a manual entrance — the
   dim fades in place while the sheet alone slides up, so the translucent panel never sweeps
   across the page like a window). `None` dismisses it (ios-uikit slides the sheet all the
-  way down past the bottom edge, then fades the dim out and dismisses unanimated). Switching directly from `Some(a)` to `Some(b)`
+  way down past the bottom edge while the dim fades out alongside, then dismisses
+  unanimated). Switching directly from `Some(a)` to `Some(b)`
   swaps the content and re-presents.
 - `.background(f)` paints the surface color edge-to-edge (under the status bar and home
   indicator) while the content itself is laid out inside the safe area (ios-uikit drops the
