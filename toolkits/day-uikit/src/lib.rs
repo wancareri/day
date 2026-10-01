@@ -1974,7 +1974,9 @@ mod imp {
             ) -> bool {
                 matches!(
                     self.ivars().kind,
-                    day_spec::GestureKind::Drag | day_spec::GestureKind::Pan
+                    day_spec::GestureKind::Drag
+                        | day_spec::GestureKind::Pan
+                        | day_spec::GestureKind::LongPress
                 )
             }
 
@@ -2083,6 +2085,19 @@ mod imp {
                                     location: at,
                                 },
                             );
+                        }
+                        day_spec::GestureKind::LongPress => {
+                            // Exactly once, when the hold is recognized (Began): the
+                            // finger lifting afterwards stays silent. The point is in
+                            // WINDOW coordinates (`locationInView(nil)`), the space an
+                            // overlay summoning at the press positions itself by.
+                            if matches!(
+                                unsafe { g.state() },
+                                UIGestureRecognizerState::Began
+                            ) {
+                                let w = unsafe { g.locationInView(None) };
+                                emit(node, Event::LongPress(day_spec::Point::new(w.x, w.y)));
+                            }
                         }
                         _ => emit(node, Event::Tap(at)),
                     }
@@ -9566,6 +9581,18 @@ mod imp {
                             Some(sel!(fire:)),
                         );
                         Retained::into_super(hover)
+                    }
+                    day_spec::GestureKind::LongPress => {
+                        // The mobile long-press summon: recognized after a short hold
+                        // (and never on a moving finger — UIKit cancels it as soon as
+                        // the touch travels), emitting `Event::LongPress` once.
+                        let lp = objc2_ui_kit::UILongPressGestureRecognizer::initWithTarget_action(
+                            objc2_ui_kit::UILongPressGestureRecognizer::alloc(mtm),
+                            Some(&target),
+                            Some(sel!(fire:)),
+                        );
+                        lp.setMinimumPressDuration(0.35);
+                        Retained::into_super(lp)
                     }
                     _ => {
                         let tap = UITapGestureRecognizer::initWithTarget_action(

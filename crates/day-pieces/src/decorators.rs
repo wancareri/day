@@ -421,6 +421,21 @@ fn op_on_tap_at(f: impl Fn(day_spec::Point) + 'static) -> impl FnOnce(Build) -> 
     }
 }
 
+fn op_on_long_press(f: impl Fn(day_spec::Point) + 'static) -> impl FnOnce(Build) -> Build {
+    move |inner| {
+        Box::new(move |cx| {
+            let n = inner(cx);
+            with_tree(|t| t.enable_gesture(n, GestureKind::LongPress));
+            cx.on(n, move |ev| {
+                if let Event::LongPress(p) = ev {
+                    f(*p);
+                }
+            });
+            n
+        })
+    }
+}
+
 fn op_on_key(f: impl Fn(&day_spec::KeyEvent) + 'static) -> impl FnOnce(Build) -> Build {
     move |inner| {
         Box::new(move |cx| {
@@ -984,6 +999,13 @@ impl<P: Piece> Decorated<P> {
     pub fn on_tap_at(self, f: impl Fn(day_spec::Point) + 'static) -> Self {
         self.push(op_on_tap_at(f))
     }
+    /// Fire once when the user presses and holds this piece long enough to summon
+    /// (the mobile long-press, ~0.35s). On UIKit the point is in WINDOW coordinates
+    /// (`location(in: nil)`) — the screen space an overlay positions itself by —
+    /// which is why this is not `on_tap_at`'s piece-local point.
+    pub fn on_long_press(self, f: impl Fn(day_spec::Point) + 'static) -> Self {
+        self.push(op_on_long_press(f))
+    }
     pub fn focused<M>(self, binding: impl IntoFocusBinding<M>) -> Self {
         let (want, on_native) = binding.into_focus_binding();
         self.push(op_focused(want, on_native))
@@ -1249,6 +1271,15 @@ pub trait Decorate: Piece + Sized {
     /// away.
     fn on_tap_at(self, f: impl Fn(day_spec::Point) + 'static) -> Decorated<Self> {
         Decorated::new(self).on_tap_at(f)
+    }
+
+    /// Fire once when the user presses and holds this piece (the mobile long-press,
+    /// ~0.35s) — the summon that opens a peek/preview or a context affordance. The
+    /// point's coordinate space is the backend's: UIKit reports WINDOW coordinates so
+    /// an overlay can be placed at the press; backends without the gesture simply
+    /// never fire, so pair any long-press-only affordance with a tap fallback.
+    fn on_long_press(self, f: impl Fn(day_spec::Point) + 'static) -> Decorated<Self> {
+        Decorated::new(self).on_long_press(f)
     }
 
     /// Bind this control's keyboard focus to a signal (docs/focus.md), two-way like every other
