@@ -4369,17 +4369,19 @@ mod imp {
         }
     }
 
-    /// How far below its final spot a cover's sheet starts, how long the entrance runs, and
-    /// how long the two-phase exit takes: the sheet slides DOWN out of the dim first (while
-    /// the dim is still fully up), then the dim fades and the dismissal lands unanimated.
-    /// The dim rides `alpha` on the cover's own view; only the content (sheet + close
-    /// affordance) translates — slide and fade are separate phases so the motion never
-    /// reads as two phases at once, and neither direction sweeps the translucent panel
-    /// across the page like a window: the platform's coverVertical slide is replaced by an
-    /// unanimated present/dismiss plus these.
+    /// How far below its final spot a cover's sheet starts, how long the entrance runs, how
+    /// long the exit's slide takes, and how long the dim's fade after it. The dim rides
+    /// `alpha` on the cover's own view; only the content (sheet + close affordance)
+    /// translates. The exit is one continuous motion: the sheet slides ALL the way down
+    /// past the bottom edge while the dim stays fully up, then the now-empty dim fades
+    /// and the dismissal lands unanimated — so the sheet always leaves by travelling to
+    /// the end, never by vanishing halfway down. Neither direction sweeps the translucent
+    /// panel across the page like a window: the platform's coverVertical slide is replaced
+    /// by an unanimated present/dismiss plus these.
     const COVER_SHEET_RISE: CGFloat = 36.0;
     const COVER_SHEET_IN: f64 = 0.16;
-    const COVER_SHEET_OUT: f64 = 0.24;
+    const COVER_SHEET_OUT: f64 = 0.28;
+    const COVER_FADE_OUT: f64 = 0.12;
 
     fn cover_slide(ty: CGFloat) -> CGAffineTransform {
         CGAffineTransform {
@@ -4442,19 +4444,24 @@ mod imp {
                     modal_end_transition();
                 })
             };
-            // Manual exit, two phases so the sheet reads as ONE motion: the sheet slides
-            // down out of the dim while the dim is still fully up, then the dim fades and
-            // the dismissal lands unanimated. A simultaneous slide under the falling alpha
-            // read as the sheet moving in two phases (up, then down); neither phase here
-            // sweeps the translucent panel across the page — the platform's coverVertical
-            // is still replaced by an unanimated dismiss, the completion above is still
-            // what reports `CoverHidden`.
+            // Manual exit: one continuous motion. The sheet slides all the way down past
+            // the bottom edge while the dim is still fully up — it leaves by travelling to
+            // the very end, never by vanishing halfway — and only then does the empty dim
+            // fade and the dismissal land unanimated. The dim rides `alpha` on this same
+            // view, so fading first would eat the sheet mid-flight; the fade has to wait
+            // its turn. Neither phase sweeps the translucent panel across the page: the
+            // platform's coverVertical is still replaced by an unanimated dismiss, the
+            // completion above is still what reports `CoverHidden`.
             let view = vc.view();
             let sheet = view
                 .as_ref()
                 .and_then(|v| unsafe { v.subviews() }.firstObject());
             match (view, sheet) {
                 (Some(view), Some(sheet)) => {
+                    // Twice the view's height: past the bottom edge no matter where on
+                    // screen the sheet sits (its own height alone would strand a sheet
+                    // that starts higher than the top edge).
+                    let drop = view.bounds().size.height * 2.0;
                     let dismiss =
                         block2::RcBlock::new(move |_finished: objc2::runtime::Bool| unsafe {
                             presenting
@@ -4469,7 +4476,7 @@ mod imp {
                     let after_slide =
                         block2::RcBlock::new(move |_finished: objc2::runtime::Bool| unsafe {
                             UIView::animateWithDuration_delay_options_animations_completion(
-                                COVER_SHEET_OUT * 0.4,
+                                COVER_FADE_OUT,
                                 0.0,
                                 uiview_anim_options(Curve::EaseOut)
                                     | UIViewAnimationOptions::BeginFromCurrentState,
@@ -4479,11 +4486,11 @@ mod imp {
                             );
                         });
                     let slide = block2::RcBlock::new(move || unsafe {
-                        sheet.setTransform(cover_slide(COVER_SHEET_RISE));
+                        sheet.setTransform(cover_slide(drop));
                     });
                     unsafe {
                         UIView::animateWithDuration_delay_options_animations_completion(
-                            COVER_SHEET_OUT * 0.6,
+                            COVER_SHEET_OUT,
                             0.0,
                             uiview_anim_options(Curve::EaseIn)
                                 | UIViewAnimationOptions::BeginFromCurrentState,
