@@ -4354,11 +4354,13 @@ mod imp {
         }
     }
 
-    /// How far below its final spot a cover's sheet starts, and how long the manual
-    /// entrance/exit runs. The dim rides `alpha` on the cover's own view; only the content
-    /// (sheet + close affordance) translates, so the translucent panel fades in place
-    /// instead of sweeping across the page like a window — the platform's coverVertical
-    /// slide replaced by an unanimated present/dismiss plus this.
+    /// How far below its final spot a cover's sheet starts, how long the entrance runs, and
+    /// how long the fade-out on the way out takes. The dim rides `alpha` on the cover's own
+    /// view; only the content (sheet + close affordance) translates, and only on the way IN
+    /// — the exit is a plain fade, because a slide under the falling alpha read as the sheet
+    /// moving in two phases. Neither direction sweeps the translucent panel across the page
+    /// like a window: the platform's coverVertical slide is replaced by an unanimated
+    /// present/dismiss plus these.
     const COVER_SHEET_RISE: CGFloat = 36.0;
     const COVER_SHEET_IN: f64 = 0.28;
     const COVER_SHEET_OUT: f64 = 0.24;
@@ -4424,17 +4426,15 @@ mod imp {
                     modal_end_transition();
                 })
             };
-            // Manual exit (the mirror of the entrance in the Cover op): fade the dim in
-            // place and slide the sheet down, THEN dismiss unanimated — reversing the
-            // platform's slide would sweep the translucent panel back across the page like
-            // a window. The dismissal itself stays unanimated, so the completion above is
-            // still what reports `CoverHidden`.
+            // Manual exit: the cover fades out in place and THEN dismisses unanimated.
+            // No translation on the way out — a slide under the falling alpha read as the
+            // sheet moving in two phases (up, then down) — and no platform slide either,
+            // which would sweep the translucent dim across the page like a window. The
+            // dismissal itself stays unanimated, so the completion above is still what
+            // reports `CoverHidden`.
             let view = vc.view();
-            let sheet = view
-                .as_ref()
-                .and_then(|v| unsafe { v.subviews() }.firstObject());
-            match (view, sheet) {
-                (Some(view), Some(sheet)) => {
+            match view {
+                Some(view) => {
                     let dismiss =
                         block2::RcBlock::new(move |_finished: objc2::runtime::Bool| unsafe {
                             presenting
@@ -4442,7 +4442,6 @@ mod imp {
                         });
                     let animations = block2::RcBlock::new(move || unsafe {
                         view.setAlpha(0.0);
-                        sheet.setTransform(cover_slide(COVER_SHEET_RISE));
                     });
                     unsafe {
                         UIView::animateWithDuration_delay_options_animations_completion(
@@ -4456,7 +4455,7 @@ mod imp {
                         );
                     }
                 }
-                _ => unsafe {
+                None => unsafe {
                     presenting.dismissViewControllerAnimated_completion(true, Some(&completion));
                 },
             }
@@ -7780,9 +7779,9 @@ mod imp {
                         // cover background (the dim over a live page) showed the window's
                         // black beneath it instead of the page. OverFullScreen keeps the
                         // presenting view in place. Presentation itself is UNANIMATED — the
-                        // entrance and exit are the manual fade-and-slide in the Cover op
-                        // and `cover_dismiss`, so the dim fades in place rather than
-                        // sweeping across the page like a window.
+                        // entrance is the manual fade-and-slide in the Cover op, the exit
+                        // is the plain fade in `cover_dismiss`, so the dim never sweeps
+                        // across the page like a window in either direction.
                         vc.setModalPresentationStyle(UIModalPresentationStyle::OverFullScreen);
                     }
                     let handle = view_of(content);
