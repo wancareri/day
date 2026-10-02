@@ -2593,6 +2593,15 @@ mod imp {
                     } else {
                         content_frame(bounds, insets, full_bleed)
                     };
+                    if is_cover {
+                        log::debug!(
+                            "COVERDBG layout: bounds={}x{} insets t{:.1} b{:.1} -> frame=({:.1},{:.1} {:.1}x{:.1})",
+                            bounds.size.width, bounds.size.height,
+                            insets.top, insets.bottom,
+                            frame.origin.x, frame.origin.y,
+                            frame.size.width, frame.size.height,
+                        );
+                    }
                     if let Some(content) = content {
                         unsafe { content.setFrame(frame) };
                         if *DIAG_NAV {
@@ -4403,6 +4412,11 @@ mod imp {
     /// the sheet never fades (it is simply there, moving), the dim never travels (it
     /// only gains opacity, in place).
     fn cover_entrance(view: Retained<UIView>, sheet: Retained<UIView>) {
+        log::debug!(
+            "COVERDBG entrance: sheet.ty={:.1} sheet.y={:.1}",
+            sheet.transform().ty,
+            sheet.frame().origin.y,
+        );
         let dim = COVER_STATE.with(|m| m.borrow().get(&ptr_of(&sheet)).and_then(|s| s.dim));
         let animations = {
             let (view, sheet) = (view, sheet);
@@ -4425,6 +4439,41 @@ mod imp {
         }
     }
 
+    fn cover_sample(view: &Retained<UIView>, sheet: &Retained<UIView>, n: u32) {
+        let sfr = sheet.frame();
+        let vfr = view.frame();
+        let (pty, py, ph) = view
+            .superview()
+            .as_ref()
+            .map(|s| {
+                let f = s.frame();
+                (s.transform().ty, f.origin.y, f.size.height)
+            })
+            .unwrap_or((0.0, 0.0, 0.0));
+        log::debug!(
+            "COVERDBG sample#{n}: sheet ty={:.1} y={:.1} | view ty={:.1} y={:.1} h={:.1} | sup ty={:.1} y={:.1} h={:.1}",
+            sheet.transform().ty,
+            sfr.origin.y,
+            view.transform().ty,
+            vfr.origin.y,
+            vfr.size.height,
+            pty,
+            py,
+            ph,
+        );
+        if n < 11 {
+            let mtm = objc2::MainThreadMarker::new().expect("cover samples run on main");
+            let bound = dispatch2::MainThreadBound::new((view.clone(), sheet.clone()), mtm);
+            let when = dispatch2::DispatchTime::try_from(std::time::Duration::from_millis(60))
+                .unwrap_or(dispatch2::DispatchTime::NOW);
+            let _ = dispatch2::DispatchQueue::main().after(when, move || {
+                let mtm = objc2::MainThreadMarker::new().expect("cover samples run on main");
+                let (v, s) = bound.get(mtm);
+                cover_sample(v, s, n + 1);
+            });
+        }
+    }
+
     /// Queue the cover's presentation behind any in-flight modal transition (§dialogs FIFO).
     fn cover_present(vc: Retained<DayCoverVC>) {
         modal_enqueue(ModalOp::Cover(vc, 0));
@@ -4434,7 +4483,13 @@ mod imp {
     /// dispose the content only after it left the screen.
     fn cover_dismiss(vc: Retained<DayCoverVC>, node: NodeId) {
         modal_enqueue(ModalOp::Run(Box::new(move || {
+            log::debug!(
+                "COVERDBG dismiss run: node={:?} presenting={}",
+                node,
+                vc.presentingViewController().is_some(),
+            );
             let Some(presenting) = vc.presentingViewController() else {
+                log::debug!("COVERDBG dismiss: no presenting VC — CoverHidden direct");
                 emit(node, Event::CoverHidden);
                 return;
             };
@@ -4448,6 +4503,7 @@ mod imp {
             let completion = {
                 let fired = fired.clone();
                 block2::RcBlock::new(move || {
+                    log::debug!("COVERDBG CoverHidden completion fired");
                     fired.store(true, std::sync::atomic::Ordering::Relaxed);
                     emit(node, Event::CoverHidden);
                     modal_end_transition();
@@ -4463,26 +4519,52 @@ mod imp {
             let sheet = view
                 .as_ref()
                 .and_then(|v| unsafe { v.subviews() }.firstObject());
+            let (has_view, has_sheet) = (view.is_some(), sheet.is_some());
             match (view, sheet) {
                 (Some(view), Some(sheet)) => {
+                    log::debug!(
+                        "COVERDBG dismiss main: view.ty={:.1} view.frame=({:.1},{:.1} {:.1}x{:.1}) sheet.ty={:.1} sheet.frame=({:.1},{:.1} {:.1}x{:.1}) bounds.h={:.1}",
+                        view.transform().ty,
+                        view.frame().origin.x,
+                        view.frame().origin.y,
+                        view.frame().size.width,
+                        view.frame().size.height,
+                        sheet.transform().ty,
+                        sheet.frame().origin.x,
+                        sheet.frame().origin.y,
+                        sheet.frame().size.width,
+                        sheet.frame().size.height,
+                        view.bounds().size.height,
+                    );
                     // Twice the view's height: past the bottom edge no matter where on
                     // screen the sheet sits (its own height alone would strand a sheet
                     // that starts higher than the top edge).
                     let drop = view.bounds().size.height * 2.0;
-                    let dismiss =
-                        block2::RcBlock::new(move |_finished: objc2::runtime::Bool| unsafe {
+                    let dismiss = block2::RcBlock::new(move |finished: objc2::runtime::Bool| {
+                        log::debug!(
+                            "COVERDBG dismiss completion: finished={}",
+                            finished.as_bool()
+                        );
+                        unsafe {
                             presenting
                                 .dismissViewControllerAnimated_completion(false, Some(&completion));
-                        });
+                        }
+                    });
                     // ONE animation from wherever the sheet currently sits: the sheet
                     // travels all the way down, fully opaque and simply moving, while the
                     // dim — this view's own background, a fixed edge-to-edge layer —
                     // washes out in place on its own track. The dismissal then lands
                     // unanimated with the sheet past the edge and the dim already clear,
                     // so the sheet glides down instead of fading away mid-flight.
+                    cover_sample(&view, &sheet, 1);
                     let animations = {
                         let (view, sheet) = (view, sheet);
                         block2::RcBlock::new(move || unsafe {
+                            log::debug!(
+                                "COVERDBG dismiss animations run: sheet.ty={:.1} -> {:.1}",
+                                sheet.transform().ty,
+                                drop,
+                            );
                             view.setBackgroundColor(Some(&UIColor::clearColor()));
                             sheet.setTransform(cover_slide(drop));
                         })
@@ -4499,9 +4581,17 @@ mod imp {
                         );
                     }
                 }
-                _ => unsafe {
-                    presenting.dismissViewControllerAnimated_completion(true, Some(&completion));
-                },
+                _ => {
+                    log::debug!(
+                        "COVERDBG dismiss ELSE: view={} sheet={} — animated UIKit dismiss",
+                        has_view,
+                        has_sheet,
+                    );
+                    unsafe {
+                        presenting
+                            .dismissViewControllerAnimated_completion(true, Some(&completion));
+                    }
+                }
             }
             let mtm = objc2::MainThreadMarker::new().expect("cover ops run on main");
             let vc_probe = dispatch2::MainThreadBound::new(vc.clone(), mtm);
@@ -8488,7 +8578,17 @@ mod imp {
                     if let Some(p) = patch.downcast_ref::<CoverPatch>() {
                         let state = COVER_STATE
                             .with(|m| m.borrow().get(&ptr_of(h)).map(|s| (s.vc.clone(), s.node)));
-                        let Some((vc, node)) = state else { return };
+                        let Some((vc, node)) = state else {
+                            let kind = match p {
+                                CoverPatch::Present { .. } => "Present",
+                                CoverPatch::DismissDisabled(_) => "DismissDisabled",
+                                CoverPatch::Dismiss => "Dismiss",
+                            };
+                            log::debug!(
+                                "COVERDBG patch {kind}: no cover state (removed?) - ignored"
+                            );
+                            return;
+                        };
                         match p {
                             CoverPatch::Present {
                                 background,
@@ -8506,12 +8606,21 @@ mod imp {
                                 // block), but honored if the presentation style ever becomes
                                 // a sheet.
                                 unsafe { vc.setModalInPresentation(*dismiss_disabled) };
+                                log::debug!(
+                                    "COVERDBG patch Present: node={:?} bg={:?} dismiss_disabled={}",
+                                    node,
+                                    background,
+                                    dismiss_disabled,
+                                );
                                 cover_present(vc);
                             }
                             CoverPatch::DismissDisabled(d) => unsafe {
                                 vc.setModalInPresentation(*d);
                             },
-                            CoverPatch::Dismiss => cover_dismiss(vc, node),
+                            CoverPatch::Dismiss => {
+                                log::debug!("COVERDBG patch Dismiss: node={:?}", node);
+                                cover_dismiss(vc, node)
+                            }
                         }
                     }
                 }
@@ -9027,7 +9136,9 @@ mod imp {
                 });
             }
             COVER_STATE.with(|m| {
-                m.borrow_mut().remove(&ptr_of(&h));
+                if m.borrow_mut().remove(&ptr_of(&h)).is_some() {
+                    log::debug!("COVERDBG release: cover state removed");
+                }
             });
             NAV_MENUS.with(|m| {
                 m.borrow_mut().remove(&ptr_of(&h));
@@ -9445,6 +9556,17 @@ mod imp {
         }
 
         fn set_frame(&mut self, h: &Handle, frame: Rect, anim: Option<&AnimSpec>) {
+            if COVER_STATE.with(|m| m.borrow().contains_key(&ptr_of(h))) {
+                log::debug!(
+                    "COVERDBG set_frame cover: ({:.1},{:.1} {:.1}x{:.1}) animated={} ty={:.1} (native-owned: not applied here)",
+                    frame.origin.x,
+                    frame.origin.y,
+                    frame.size.width,
+                    frame.size.height,
+                    anim.is_some(),
+                    h.transform().ty,
+                );
+            }
             // Nav page content: the page view pins it to the safe area (native-owned).
             if NAV_PAGES.with(|set| set.borrow().contains(&ptr_of(h))) {
                 return;
@@ -9496,6 +9618,17 @@ mod imp {
             _size: Size,
             anim: Option<&AnimSpec>,
         ) {
+            if COVER_STATE.with(|m| m.borrow().contains_key(&ptr_of(h))) {
+                log::debug!(
+                    "COVERDBG set_transform cover: tx={:.1} ty={:.1} sx={:.1} sy={:.1} rot={:.1} animated={}",
+                    t.tx,
+                    t.ty,
+                    t.sx,
+                    t.sy,
+                    t.rotate_deg,
+                    anim.is_some(),
+                );
+            }
             let v = h.clone();
             let tf = cgaffine(t);
             with_uikit_anim(anim, move || unsafe { v.setTransform(tf) });
@@ -10560,11 +10693,25 @@ mod imp {
     /// the busy flag and pumps again.
     fn modal_pump() {
         if MODAL_BUSY.with(|c| c.get()) {
+            log::debug!(
+                "COVERDBG pump: busy, op deferred (queue left={})",
+                MODAL_QUEUE.with(|q| q.borrow().len()),
+            );
             return;
         }
         let Some(op) = MODAL_QUEUE.with(|q| q.borrow_mut().pop_front()) else {
             return;
         };
+        let kind = match &op {
+            ModalOp::Present(req, _) => format!("Present(req={req})"),
+            ModalOp::Dismiss(req, tries) => format!("Dismiss(req={req} tries={tries})"),
+            ModalOp::Cover(_, tries) => format!("Cover(tries={tries})"),
+            ModalOp::Run(_) => "Run".to_string(),
+        };
+        log::debug!(
+            "COVERDBG pump: {kind} (queue left={})",
+            MODAL_QUEUE.with(|q| q.borrow().len()),
+        );
         match op {
             ModalOp::Present(req, vc) => {
                 // Presenting while ANOTHER transition animates (a nav push the script just
@@ -10705,6 +10852,11 @@ mod imp {
                 }
                 if let Some(s) = sheet.as_ref() {
                     unsafe { s.setTransform(cover_slide(COVER_SHEET_RISE)) };
+                    log::debug!(
+                        "COVERDBG present: sheet pre-set ty={:.1} frame.y={:.1} (unanimated, entrance queued)",
+                        s.transform().ty,
+                        s.frame().origin.y,
+                    );
                 }
                 let completion = {
                     let (view, sheet) = (view.clone(), sheet.clone());

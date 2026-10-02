@@ -3869,8 +3869,14 @@ impl<S: Binding<Option<R>>, R: Route> Piece for Cover<S, R> {
                     let already =
                         !closing.get() && current.borrow().as_ref().is_some_and(|p| p.key == *r);
                     if already {
+                        log::debug!("COVERDBG reconcile: already presented - no re-present");
                         return;
                     }
+                    log::debug!(
+                        "COVERDBG reconcile: mount content (closing={} had_content={})",
+                        closing.get(),
+                        current.borrow().is_some(),
+                    );
                     dispose_content();
                     closing.set(false);
                     let scope = owner_scope.enter(Scope::child);
@@ -3905,8 +3911,15 @@ impl<S: Binding<Option<R>>, R: Route> Piece for Cover<S, R> {
                 }
                 None => {
                     if current.borrow().is_some() && !closing.get() {
+                        log::debug!("COVERDBG reconcile: dismiss patched (open -> None)");
                         closing.set(true);
                         with_tree(|t| t.patch(node, Box::new(CoverPatch::Dismiss), false));
+                    } else {
+                        log::debug!(
+                            "COVERDBG reconcile: open=None ignored (content={} closing={})",
+                            current.borrow().is_some(),
+                            closing.get(),
+                        );
                     }
                 }
             }
@@ -3948,6 +3961,11 @@ impl<S: Binding<Option<R>>, R: Route> Piece for Cover<S, R> {
                 // The backend sized the presented content container (safe-area bounds).
                 Event::FrameChanged(sz) => {
                     if *size.borrow() != Some(*sz) {
+                        log::debug!(
+                            "COVERDBG FrameChanged: cover size {:?} -> {:?}",
+                            *size.borrow(),
+                            *sz,
+                        );
                         *size.borrow_mut() = Some(*sz);
                         with_tree(|t| {
                             t.mark_needs_measure(node);
@@ -3959,6 +3977,11 @@ impl<S: Binding<Option<R>>, R: Route> Piece for Cover<S, R> {
                 // Native dismissal request (Android system back). Honored unless an
                 // `interactive_dismiss_disabled` subtree is mounted.
                 Event::NavBack { .. } => {
+                    log::debug!(
+                        "COVERDBG NavBack: dismiss_disabled={} open={}",
+                        day_core::shield::dismiss_disabled(),
+                        o.peek().is_some(),
+                    );
                     if !day_core::shield::dismiss_disabled() && o.peek().is_some() {
                         o.write(None);
                     }
@@ -3967,8 +3990,16 @@ impl<S: Binding<Option<R>>, R: Route> Piece for Cover<S, R> {
                 // Idempotent + orderable (docs/cover.md): duplicates and belated reports
                 // from a previous dismissal are no-ops via the closing gate.
                 Event::CoverHidden if closing.get() => {
+                    log::debug!("COVERDBG CoverHidden: closing - disposing content");
                     closing.set(false);
                     dispose_content();
+                }
+                Event::CoverHidden => {
+                    log::debug!(
+                        "COVERDBG CoverHidden: ignored (closing={} content={})",
+                        closing.get(),
+                        current.borrow().is_some(),
+                    );
                 }
                 _ => {}
             });
