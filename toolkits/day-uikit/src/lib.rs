@@ -4402,9 +4402,9 @@ mod imp {
     }
 
     /// How long the entrance runs, how long the exit takes — the same span, because the
-    /// entrance is the exit played backwards: it starts one full [`cover_drop`] below the
-    /// spot the dismissal starts from, rises on the EaseOut mirror of the exit's EaseIn
-    /// glide over that same distance, and lands where the exit began. Both directions are
+    /// entrance is the exit played backwards: it starts one [`cover_drop`] below the spot
+    /// the dismissal starts from, rises on the EaseOut mirror of the exit's EaseIn glide
+    /// over that same distance, and lands where the exit began. Both directions are
     /// ONE motion: the sheet travels the whole way while the dim fades in or out on its own
     /// track (in place, never translating), and the transition lands unanimated — the sheet
     /// never jumps up, never pauses, never vanishes halfway. Neither direction sweeps the
@@ -4413,17 +4413,17 @@ mod imp {
     const COVER_SHEET_IN: f64 = 0.40;
     const COVER_SHEET_OUT: f64 = 0.40;
 
-    /// The single distance either direction travels: twice the window's height, so the sheet
-    /// ends up fully past the bottom edge from wherever it sits (its own height alone would
-    /// strand a sheet that starts higher than the top edge). Both directions read the same
-    /// window, so the entrance covers exactly the ground the dismissal covers — open and
-    /// close are one motion mirrored in time.
-    fn cover_drop(view: &UIView) -> CGFloat {
-        let h = view
-            .window()
-            .map(|w| w.bounds().size.height)
-            .unwrap_or(view.bounds().size.height);
-        h * 2.0
+    /// The single distance either direction travels: the sheet's resting top edge down to
+    /// just past the screen's bottom, so it ends fully out of frame exactly as the motion
+    /// ends. Traveling TWICE the screen height instead — the old number — left the sheet
+    /// two screens below while the dim was already washing in, so the eye read the
+    /// darkening first and the card second; measured to the edge, the card comes into
+    /// frame while the dim is still starting, and the two cues launch together. Both
+    /// directions read the same laid-out geometry, so the entrance covers exactly the
+    /// ground the dismissal covers — open and close are one motion mirrored in time.
+    fn cover_drop(view: &UIView, sheet: &UIView) -> CGFloat {
+        let rest_y = sheet.frame().origin.y - sheet.transform().ty;
+        view.bounds().size.height - rest_y + 8.0
     }
 
     fn cover_slide(ty: CGFloat) -> CGAffineTransform {
@@ -4439,20 +4439,26 @@ mod imp {
 
     /// The cover's entrance, run right after the non-animated present: the dismissal
     /// (see [`cover_dismiss`]) played backwards, property for property. The sheet was
-    /// parked one full [`cover_drop`] below its spot before the present (so the first
-    /// frame is already the hidden one) and now glides up on EaseOut — the time-reverse
+    /// parked one [`cover_drop`] below its spot before the present (so the first frame is
+    /// already the hidden one) and now glides up on EaseOut — the time-reverse
     /// of the exit's EaseIn glide out, over the same distance and the same
     /// `COVER_SHEET_IN`. The dim, this view's own background, washes in on its own
     /// EaseInOut track in place — the mirror of the dismissal's wash-out. Two independent
     /// properties: the sheet never fades (it is simply there, moving), the dim never
     /// travels (it only gains opacity, in place).
     fn cover_entrance(view: Retained<UIView>, sheet: Retained<UIView>) {
+        let drop = cover_drop(&view, &sheet);
         log::debug!(
             "COVERDBG entrance: sheet.ty={:.1} sheet.y={:.1} drop={:.1}",
             sheet.transform().ty,
             sheet.frame().origin.y,
-            cover_drop(&view),
+            drop,
         );
+        // Re-pin to the exact distance: whatever the pre-present value was, the start of
+        // the motion is now computed from the presented, laid-out geometry. The correction
+        // lands below the screen edge (the sheet is out of frame either way), so it is not
+        // a jump anyone can see.
+        unsafe { sheet.setTransform(cover_slide(drop)) };
         cover_sample(&view, &sheet, 0);
         let dim = COVER_STATE.with(|m| m.borrow().get(&ptr_of(&sheet)).and_then(|s| s.dim));
         let slide = {
@@ -4589,9 +4595,11 @@ mod imp {
                         sheet.frame().size.height,
                         view.bounds().size.height,
                     );
-                    // The same distance the entrance travels, read from the same window:
-                    // the close covers exactly the ground the open covered, in reverse.
-                    let drop = cover_drop(&view);
+                    // The same distance the entrance travels, read from the same laid-out
+                    // geometry: the close covers exactly the ground the open covered, in
+                    // reverse — and it stops at the screen's edge, so the card stays on
+                    // screen for the whole glide instead of vanishing early.
+                    let drop = cover_drop(&view, &sheet);
                     let dismiss = block2::RcBlock::new(move |finished: objc2::runtime::Bool| {
                         log::debug!(
                             "COVERDBG dismiss completion: finished={}",
@@ -10908,7 +10916,8 @@ mod imp {
                 // platform slide-up dragged the WHOLE translucent cover — dim included —
                 // across the page like a window. The start state is set before the present
                 // so the first frame is already the hidden one: the sheet waits one full
-                // `cover_drop` below its spot — the very distance the dismissal covers —
+                // `cover_drop` below its spot — out of frame at the screen's edge, the very
+                // distance the dismissal covers —
                 // and the dim (this view's own background, laid edge to edge) starts fully
                 // transparent. The entrance then plays the dismissal backwards, so the
                 // sheet never fades and the dim never travels.
@@ -10919,11 +10928,13 @@ mod imp {
                 if let Some(v) = view.as_ref() {
                     unsafe { v.setBackgroundColor(Some(&UIColor::clearColor())) };
                 }
-                // The presenting page is already on screen, so its window is too — and it
-                // is the same window the dismissal reads, which is what makes both
-                // directions cover identical ground.
-                let drop = top.view().as_ref().map(|v| cover_drop(v)).unwrap_or(0.0);
                 if let Some(s) = sheet.as_ref() {
+                    // The presenting page is already laid out, so its height is real where
+                    // the cover's own view may not be yet — and it is the same geometry the
+                    // dismissal reads, which is what makes both directions identical. The
+                    // entrance re-pins the value from the presented view anyway; this one
+                    // only has to be far enough out of frame for the first rendered frame.
+                    let drop = top.view().as_ref().map(|v| cover_drop(v, s)).unwrap_or(0.0);
                     unsafe { s.setTransform(cover_slide(drop)) };
                     log::debug!(
                         "COVERDBG present: sheet pre-set ty={:.1} drop={:.1} frame.y={:.1} (unanimated, entrance queued)",
