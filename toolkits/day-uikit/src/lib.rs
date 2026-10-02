@@ -4412,7 +4412,7 @@ mod imp {
     /// slide is replaced by an unanimated present/dismiss plus these.
     const COVER_SHEET_RISE: CGFloat = 36.0;
     const COVER_SHEET_IN: f64 = 0.16;
-    const COVER_SHEET_OUT: f64 = 0.30;
+    const COVER_SHEET_OUT: f64 = 0.40;
 
     fn cover_slide(ty: CGFloat) -> CGAffineTransform {
         CGAffineTransform {
@@ -4576,15 +4576,31 @@ mod imp {
                     // unanimated with the sheet past the edge and the dim already clear,
                     // so the sheet glides down instead of fading away mid-flight.
                     cover_sample(&view, &sheet, 1);
+                    let dim_anim = {
+                        let view = view.clone();
+                        block2::RcBlock::new(move || unsafe {
+                            view.setBackgroundColor(Some(&UIColor::clearColor()));
+                        })
+                    };
+                    unsafe {
+                        UIView::animateWithDuration_delay_options_animations_completion(
+                            COVER_SHEET_OUT,
+                            0.0,
+                            uiview_anim_options(Curve::EaseInOut)
+                                | UIViewAnimationOptions::BeginFromCurrentState,
+                            &dim_anim,
+                            None,
+                            mtm(),
+                        );
+                    }
                     let animations = {
-                        let (view, sheet) = (view, sheet);
+                        let sheet = sheet.clone();
                         block2::RcBlock::new(move || unsafe {
                             log::debug!(
                                 "COVERDBG dismiss animations run: sheet.ty={:.1} -> {:.1}",
                                 sheet.transform().ty,
                                 drop,
                             );
-                            view.setBackgroundColor(Some(&UIColor::clearColor()));
                             sheet.setTransform(cover_slide(drop));
                         })
                     };
@@ -4592,7 +4608,7 @@ mod imp {
                         UIView::animateWithDuration_delay_options_animations_completion(
                             COVER_SHEET_OUT,
                             0.0,
-                            uiview_anim_options(Curve::EaseOut)
+                            uiview_anim_options(Curve::EaseIn)
                                 | UIViewAnimationOptions::BeginFromCurrentState,
                             &animations,
                             Some(&dismiss),
