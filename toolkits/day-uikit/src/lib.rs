@@ -4411,7 +4411,7 @@ mod imp {
     /// the translucent panel across the page like a window: the platform's coverVertical
     /// slide is replaced by an unanimated present/dismiss plus these.
     const COVER_SHEET_RISE: CGFloat = 36.0;
-    const COVER_SHEET_IN: f64 = 0.16;
+    const COVER_SHEET_IN: f64 = 0.40;
     const COVER_SHEET_OUT: f64 = 0.40;
 
     fn cover_slide(ty: CGFloat) -> CGAffineTransform {
