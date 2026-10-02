@@ -2593,17 +2593,36 @@ mod imp {
                     } else {
                         content_frame(bounds, insets, full_bleed)
                     };
-                    if is_cover {
-                        log::debug!(
-                            "COVERDBG layout: bounds={}x{} insets t{:.1} b{:.1} -> frame=({:.1},{:.1} {:.1}x{:.1})",
-                            bounds.size.width, bounds.size.height,
-                            insets.top, insets.bottom,
-                            frame.origin.x, frame.origin.y,
-                            frame.size.width, frame.size.height,
-                        );
-                    }
                     if let Some(content) = content {
-                        unsafe { content.setFrame(frame) };
+                        let t = content.transform();
+                        let identity = t.a == 1.0
+                            && t.b == 0.0
+                            && t.c == 0.0
+                            && t.d == 1.0
+                            && t.tx == 0.0
+                            && t.ty == 0.0;
+                        if identity {
+                            unsafe { content.setFrame(frame) };
+                        } else {
+                            unsafe {
+                                content.setBounds(CGRect::new(CGPoint::ZERO, frame.size));
+                                content.setCenter(CGPoint::new(
+                                    frame.origin.x + frame.size.width / 2.0,
+                                    frame.origin.y + frame.size.height / 2.0,
+                                ));
+                            }
+                        }
+                        if is_cover {
+                            log::debug!(
+                                "COVERDBG layout: bounds={}x{} insets t{:.1} b{:.1} -> frame=({:.1},{:.1} {:.1}x{:.1}) ty={:.1} {}",
+                                bounds.size.width, bounds.size.height,
+                                insets.top, insets.bottom,
+                                frame.origin.x, frame.origin.y,
+                                frame.size.width, frame.size.height,
+                                t.ty,
+                                if identity { "setFrame" } else { "bounds+center" },
+                            );
+                        }
                         if *DIAG_NAV {
                             let a = content.frame();
                             log::debug!(
