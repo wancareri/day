@@ -294,6 +294,13 @@ children align within their line via `.align(VAlign::…)`. Wrapping replaces ma
 negotiation, so `.grow()` and `spacer()` are inert, and a single child wider than the window
 still overflows.
 
+`WrapCentered` keeps `Wrap`'s natural-width lines but centers each line in the width available,
+so a keypad whose last row holds fewer keys sits centered instead of hanging left:
+
+```rust
+row((keys,)).spacing(8.0).fit(RowFit::WrapCentered { run_spacing: 8.0 })
+```
+
 `WrapColumns` wraps the same way but into aligned columns: every cell takes the widest child's
 width, and each line holds as many as the window fits. `Wrap` keeps each child at its natural
 width, so the lines come out ragged, which is right for chips of unequal weight and wrong for a set

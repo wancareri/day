@@ -127,6 +127,10 @@ pub enum RowFit {
     /// the shape a chip row or button strip wants. `run_spacing` is the vertical gap between
     /// lines. Wrapping replaces main-axis negotiation, so `.grow()` and `spacer()` are inert.
     Wrap { run_spacing: f64 },
+    /// [`Wrap`](RowFit::Wrap)'s centered twin: natural-width lines, each centered in the
+    /// available width instead of packed leading — the short last line of a keypad of peer
+    /// buttons sits in the middle rather than hanging left.
+    WrapCentered { run_spacing: f64 },
     /// Wrap into aligned COLUMNS rather than ragged lines: every cell takes the widest
     /// child's width, and each line holds as many as the window fits. The tidier arm of
     /// [`Wrap`](RowFit::Wrap) — same wrapping, but the lines stack into a grid, which is what
@@ -136,8 +140,7 @@ pub enum RowFit {
     /// the adaptive grid a gallery of tiles wants. No cell is wider than the line: on a window
     /// narrower than the widest child, the cells take its width and their text wraps. An
     /// authored, fixed column count with
-    /// per-cell spans is [`grid`]'s job instead (docs/grid.md). A line that comes up
-    /// short of the full width is centered in it.
+    /// per-cell spans is [`grid`]'s job instead (docs/grid.md).
     WrapColumns { run_spacing: f64 },
     /// Re-arrange into a leading-aligned column while the window's [`WidthClass`] is at or
     /// below the given one — the shape a label-plus-control-plus-result line wants, where
@@ -245,7 +248,9 @@ impl<C: PieceSeq> Piece for Row<C> {
                 let align = self.align;
                 self.build_line(cx, Axis::Horizontal, align)
             }
-            RowFit::Wrap { run_spacing } | RowFit::WrapColumns { run_spacing } => {
+            RowFit::Wrap { run_spacing }
+            | RowFit::WrapCentered { run_spacing }
+            | RowFit::WrapColumns { run_spacing } => {
                 let node = cx.native(
                     kinds::CONTAINER,
                     &ContainerProps::default(),
@@ -254,6 +259,7 @@ impl<C: PieceSeq> Piece for Row<C> {
                         run_spacing,
                         align: self.align,
                         uniform: matches!(self.fit, RowFit::WrapColumns { .. }),
+                        center_runs: matches!(self.fit, RowFit::WrapCentered { .. }),
                     }),
                     Flex::default(),
                     Boundary::No,

@@ -785,6 +785,10 @@ pub struct FlowLayout {
     /// columns; when any child grows (`grow_w`), the columns stretch to share the whole width.
     /// `false` packs each line at natural widths, which comes out ragged.
     pub uniform: bool,
+    /// Center each line in the width the flow is given ([`RowFit::WrapCentered`]): a short
+    /// line sits mid-window instead of packing leading. `false` keeps the leading edge,
+    /// what wrapped prose wants.
+    pub center_runs: bool,
 }
 
 /// One packed flow line: the child range it holds and its settled extent.
@@ -935,9 +939,10 @@ impl Layout for FlowLayout {
         let mut y = 0.0;
         for line in &plan.lines {
             let range = line.start..line.end;
-            // A uniform grid's last line can come up short — center it: a grid of
-            // peers rather than wrapped prose (Wrap keeps its leading edge).
-            let mut x = if self.uniform {
+            // Centered runs (RowFit::WrapCentered): a line that comes up short of the
+            // window sits in the middle of it; the default packs leading, what wrapped
+            // prose and a laid-out grid want.
+            let mut x = if self.center_runs {
                 let line_w: f64 = plan.sizes[range.clone()]
                     .iter()
                     .map(|s| s.width)

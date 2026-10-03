@@ -85,3 +85,22 @@ fn a_child_wider_than_the_row_wraps_inside_it() {
     assert!(f[0].size.height > 16.0, "wrapped onto more lines: {f:?}");
     assert_eq!(f[1].origin.y, f[0].size.height + 6.0, "{f:?}");
 }
+
+#[test]
+fn wrap_centered_centers_each_line() {
+    // Three 8pt labels at a 40pt gutter in a 100pt row: "a b" (56pt) fits, "c" wraps to a
+    // second line. WrapCentered puts line one at (100 − 56) / 2 and the short line two at
+    // (100 − 8) / 2 — mid-window, not packed leading.
+    let probe = boot(|| {
+        column((row((label("a"), label("b"), label("c")))
+            .spacing(40.0)
+            .fit(RowFit::WrapCentered { run_spacing: 6.0 })
+            .width(100.0),))
+        .align(HAlign::Leading)
+        .any()
+    });
+    let f = label_frames(&probe);
+    assert_eq!(f[0], Rect::new(22.0, 0.0, 8.0, 16.0), "{f:?}");
+    assert_eq!(f[1], Rect::new(70.0, 0.0, 8.0, 16.0), "{f:?}");
+    assert_eq!(f[2], Rect::new(46.0, 22.0, 8.0, 16.0), "short line centered");
+}
