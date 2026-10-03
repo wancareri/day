@@ -934,8 +934,19 @@ impl Layout for FlowLayout {
         let plan = self.plan(cx, &kids, Some(bounds.size.width));
         let mut y = 0.0;
         for line in &plan.lines {
-            let mut x = 0.0;
             let range = line.start..line.end;
+            // A uniform grid's last line can come up short — center it: a grid of
+            // peers rather than wrapped prose (Wrap keeps its leading edge).
+            let mut x = if self.uniform {
+                let line_w: f64 = plan.sizes[range.clone()]
+                    .iter()
+                    .map(|s| s.width)
+                    .sum::<f64>()
+                    + self.spacing * (range.len().saturating_sub(1)) as f64;
+                ((bounds.size.width - line_w) / 2.0).max(0.0)
+            } else {
+                0.0
+            };
             for (&k, &s) in kids[range.clone()].iter().zip(&plan.sizes[range]) {
                 let dy = ((line.height - s.height) * self.align.fraction()).max(0.0);
                 cx.place_child(k, Rect::new(x, y + dy, s.width, s.height));

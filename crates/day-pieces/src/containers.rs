@@ -136,7 +136,8 @@ pub enum RowFit {
     /// the adaptive grid a gallery of tiles wants. No cell is wider than the line: on a window
     /// narrower than the widest child, the cells take its width and their text wraps. An
     /// authored, fixed column count with
-    /// per-cell spans is [`grid`]'s job instead (docs/grid.md).
+    /// per-cell spans is [`grid`]'s job instead (docs/grid.md). A line that comes up
+    /// short of the full width is centered in it.
     WrapColumns { run_spacing: f64 },
     /// Re-arrange into a leading-aligned column while the window's [`WidthClass`] is at or
     /// below the given one — the shape a label-plus-control-plus-result line wants, where
