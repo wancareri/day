@@ -2707,6 +2707,13 @@ mod imp {
         )
     }
 
+    /// A view tag (set through the `.uikit()` hook) marking a sibling beside a page's
+    /// content as a floating annotation: `scroll_leaf` skips it when resolving the
+    /// content chain, so a status capsule next to a scroll root costs neither the page
+    /// its full-bleed frame nor the annotation its pinned position (it stays outside
+    /// the scroll, above the bars' content).
+    pub const ANNOTATION_TAG: objc2::ffi::NSInteger = -7301;
+
     fn scroll_leaf(content: &UIView) -> bool {
         let mut view = content.retain();
         // Day's wrappers are shallow; a bound keeps a pathological tree from being walked twice
@@ -2730,6 +2737,11 @@ mod imp {
                         continue;
                     }
                     if COVER_STATE.with(|m| m.borrow().contains_key(&ptr_of(&v))) {
+                        continue;
+                    }
+                    // A tagged floating annotation (a status capsule) rides beside the
+                    // content without joining it — the chain below stays the page's.
+                    if v.tag() == ANNOTATION_TAG {
                         continue;
                     }
                     if found.is_some() {
