@@ -2178,6 +2178,9 @@ impl Toolkit for Xaml {
                             TextFieldPatch::Placeholder(t) => {
                                 ffi::day_xaml_textbox_set_placeholder(h.0, cstr(t).as_ptr())
                             }
+                            TextFieldPatch::Secure(_) => {
+                                // Secure variant not applicable on Windows backend; ignore
+                            }
                             TextFieldPatch::Enabled(e) => {
                                 ffi::day_xaml_set_enabled(h.0, *e as c_int)
                             }
