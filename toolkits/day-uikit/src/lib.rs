@@ -7735,16 +7735,11 @@ mod imp {
                     // `props_of` reports it.
                     if let Some(p) = day_spec::props_of::<ContainerProps>(kind, "uikit", props) {
                         if p.role == Some(day_spec::SurfaceRole::SectionCard) {
-                            // The card half of the grouped pair (`DayNavPageView`): a card is
-                            // what LIFTS off the grouped ground, so it takes the lighter of the
-                            // two rather than a fill tinted over whatever is behind it —
-                            // `tertiarySystemFill` is translucent, and on the grouped ground it
-                            // read as grey on grey. Dynamic either way: UIKit re-resolves it on
-                            // trait-collection (light/dark) changes automatically.
+                            // SectionCard sits transparently over the grouped page ground
+                            // (`DayNavPageView`) while preserving rounded clipping (`corner_radius`
+                            // + `masksToBounds`) for Liquid Glass and section layout.
                             unsafe {
-                                v.setBackgroundColor(Some(
-                                    &UIColor::secondarySystemGroupedBackgroundColor(),
-                                ));
+                                v.setBackgroundColor(Some(&UIColor::clearColor()));
                                 let layer = v.layer();
                                 layer.setCornerRadius(p.corner_radius);
                                 layer.setMasksToBounds(true);
