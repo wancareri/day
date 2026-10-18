@@ -4619,14 +4619,14 @@ mod imp {
                     // reverse — and it stops at the screen's edge, so the card stays on
                     // screen for the whole glide instead of vanishing early.
                     let drop = cover_drop(&view, &sheet);
-                    let vc_dismiss = vc.clone();
+                    let presenting_dismiss = presenting.clone();
                     let dismiss = block2::RcBlock::new(move |finished: objc2::runtime::Bool| {
                         log::debug!(
                             "COVERDBG dismiss completion: finished={}",
                             finished.as_bool()
                         );
                         unsafe {
-                            vc_dismiss
+                            presenting_dismiss
                                 .dismissViewControllerAnimated_completion(false, Some(&completion));
                         }
                     });
@@ -4684,22 +4684,20 @@ mod imp {
                         has_sheet,
                     );
                     unsafe {
-                        vc.dismissViewControllerAnimated_completion(true, Some(&completion));
+                        presenting.dismissViewControllerAnimated_completion(true, Some(&completion));
                     }
                 }
             }
             let mtm = objc2::MainThreadMarker::new().expect("cover ops run on main");
-            let vc_probe = dispatch2::MainThreadBound::new(vc.clone(), mtm);
-            let when = dispatch2::DispatchTime::try_from(std::time::Duration::from_millis(500))
+            let pres_probe = dispatch2::MainThreadBound::new(presenting.clone(), mtm);
+            let when = dispatch2::DispatchTime::try_from(std::time::Duration::from_millis(1500))
                 .unwrap_or(dispatch2::DispatchTime::NOW);
             let _ = dispatch2::DispatchQueue::main().after(when, move || {
                 let mtm = objc2::MainThreadMarker::new().expect("dispatched to main");
                 if !fired.swap(true, std::sync::atomic::Ordering::Relaxed) {
                     log::warn!("cover dismissal completion lost — forcing CoverHidden and modal_end_transition");
-                    let vc_ref = vc_probe.get(mtm);
-                    if vc_ref.presentingViewController().is_some() {
-                        unsafe { vc_ref.dismissViewControllerAnimated_completion(false, None); }
-                    }
+                    let pres_ref = pres_probe.get(mtm);
+                    unsafe { pres_ref.dismissViewControllerAnimated_completion(false, None); }
                     emit(node, Event::CoverHidden);
                     modal_end_transition();
                 }
@@ -10903,7 +10901,11 @@ mod imp {
                         modal_defer_retry(ModalOp::Cover(vc, tries + 1));
                         return;
                     }
-                    modal_pump(); // already up (a re-present while closing was cancelled)
+                    if let Some(p) = vc.presentingViewController() {
+                        log::warn!("ModalOp::Cover: stale presenting VC detected after {tries} tries, dismissing");
+                        unsafe { p.dismissViewControllerAnimated_completion(false, None); }
+                    }
+                    modal_defer_retry(ModalOp::Cover(vc, 0));
                     return;
                 }
                 // The same wait `Present` above does, and for the same reason: presenting across
@@ -10928,7 +10930,13 @@ mod imp {
                     modal_pump();
                     return;
                 }
-                let Some(top) = topmost_vc() else {
+                let mut top_opt = topmost_vc();
+                if let Some(ref top) = top_opt {
+                    if Retained::as_ptr(top) as *const () == Retained::as_ptr(&vc) as *const () {
+                        top_opt = vc.presentingViewController();
+                    }
+                }
+                let Some(top) = top_opt else {
                     modal_pump();
                     return;
                 };
