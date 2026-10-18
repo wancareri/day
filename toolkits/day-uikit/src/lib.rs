@@ -4574,10 +4574,11 @@ mod imp {
             let completion = {
                 let fired = fired.clone();
                 block2::RcBlock::new(move || {
-                    log::debug!("COVERDBG CoverHidden completion fired");
-                    fired.store(true, std::sync::atomic::Ordering::Relaxed);
-                    emit(node, Event::CoverHidden);
-                    modal_end_transition();
+                    if !fired.swap(true, std::sync::atomic::Ordering::Relaxed) {
+                        log::debug!("COVERDBG CoverHidden completion fired");
+                        emit(node, Event::CoverHidden);
+                        modal_end_transition();
+                    }
                 })
             };
             // Manual exit: ONE motion. The sheet travels from wherever it currently sits
@@ -4612,13 +4613,14 @@ mod imp {
                     // reverse — and it stops at the screen's edge, so the card stays on
                     // screen for the whole glide instead of vanishing early.
                     let drop = cover_drop(&view, &sheet);
+                    let vc_dismiss = vc.clone();
                     let dismiss = block2::RcBlock::new(move |finished: objc2::runtime::Bool| {
                         log::debug!(
                             "COVERDBG dismiss completion: finished={}",
                             finished.as_bool()
                         );
                         unsafe {
-                            presenting
+                            vc_dismiss
                                 .dismissViewControllerAnimated_completion(false, Some(&completion));
                         }
                     });
@@ -4676,22 +4678,24 @@ mod imp {
                         has_sheet,
                     );
                     unsafe {
-                        presenting
-                            .dismissViewControllerAnimated_completion(true, Some(&completion));
+                        vc.dismissViewControllerAnimated_completion(true, Some(&completion));
                     }
                 }
             }
             let mtm = objc2::MainThreadMarker::new().expect("cover ops run on main");
             let vc_probe = dispatch2::MainThreadBound::new(vc.clone(), mtm);
-            let when = dispatch2::DispatchTime::try_from(std::time::Duration::from_millis(1500))
+            let when = dispatch2::DispatchTime::try_from(std::time::Duration::from_millis(500))
                 .unwrap_or(dispatch2::DispatchTime::NOW);
             let _ = dispatch2::DispatchQueue::main().after(when, move || {
                 let mtm = objc2::MainThreadMarker::new().expect("dispatched to main");
-                if !fired.load(std::sync::atomic::Ordering::Relaxed)
-                    && vc_probe.get(mtm).presentingViewController().is_none()
-                {
-                    log::warn!("cover dismissal completion lost — reporting CoverHidden");
+                if !fired.swap(true, std::sync::atomic::Ordering::Relaxed) {
+                    log::warn!("cover dismissal completion lost — forcing CoverHidden and modal_end_transition");
+                    let vc_ref = vc_probe.get(mtm);
+                    if vc_ref.presentingViewController().is_some() {
+                        unsafe { vc_ref.dismissViewControllerAnimated_completion(false, None); }
+                    }
                     emit(node, Event::CoverHidden);
+                    modal_end_transition();
                 }
             });
         })));
@@ -10889,6 +10893,10 @@ mod imp {
             }
             ModalOp::Cover(vc, tries) => {
                 if vc.presentingViewController().is_some() {
+                    if vc.isBeingDismissed() || tries < 30 {
+                        modal_defer_retry(ModalOp::Cover(vc, tries + 1));
+                        return;
+                    }
                     modal_pump(); // already up (a re-present while closing was cancelled)
                     return;
                 }

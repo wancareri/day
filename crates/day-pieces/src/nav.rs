@@ -3989,17 +3989,16 @@ impl<S: Binding<Option<R>>, R: Route> Piece for Cover<S, R> {
                 // The hide transition finished — now the content can go.
                 // Idempotent + orderable (docs/cover.md): duplicates and belated reports
                 // from a previous dismissal are no-ops via the closing gate.
-                Event::CoverHidden if closing.get() => {
-                    log::debug!("COVERDBG CoverHidden: closing - disposing content");
-                    closing.set(false);
-                    dispose_content();
-                }
                 Event::CoverHidden => {
                     log::debug!(
-                        "COVERDBG CoverHidden: ignored (closing={} content={})",
+                        "COVERDBG CoverHidden: closing={} content={}",
                         closing.get(),
                         current.borrow().is_some(),
                     );
+                    closing.set(false);
+                    if o.peek().is_none() {
+                        dispose_content();
+                    }
                 }
                 _ => {}
             });
