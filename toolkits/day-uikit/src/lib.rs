@@ -4471,8 +4471,14 @@ mod imp {
         // lands below the screen edge (the sheet is out of frame either way), so it is not
         // a jump anyone can see.
         unsafe { sheet.setTransform(cover_slide(drop)) };
-        cover_sample(&view, &sheet, 0);
-        let dim = COVER_STATE.with(|m| m.borrow().get(&ptr_of(&sheet)).and_then(|s| s.dim));
+        let dim = COVER_STATE.with(|m| {
+            let bm = m.borrow();
+            bm.values()
+                .find(|s| s.vc.view().as_ref() == Some(&view))
+                .and_then(|s| s.dim)
+                .or_else(|| bm.get(&ptr_of(&sheet)).and_then(|s| s.dim))
+                .or(Some(day_spec::Color::rgba(0.0, 0.0, 0.0, 0.50)))
+        });
         let slide = {
             let sheet = sheet.clone();
             block2::RcBlock::new(move || unsafe {
