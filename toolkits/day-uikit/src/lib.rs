@@ -4619,16 +4619,23 @@ mod imp {
                     // reverse — and it stops at the screen's edge, so the card stays on
                     // screen for the whole glide instead of vanishing early.
                     let drop = cover_drop(&view, &sheet);
+                    let vc_dismiss = vc.clone();
                     let presenting_dismiss = presenting.clone();
+                    let comp = completion.clone();
                     let dismiss = block2::RcBlock::new(move |finished: objc2::runtime::Bool| {
                         log::debug!(
                             "COVERDBG dismiss completion: finished={}",
                             finished.as_bool()
                         );
                         unsafe {
-                            presenting_dismiss
-                                .dismissViewControllerAnimated_completion(false, Some(&completion));
+                            if let Some(p) = vc_dismiss.presentingViewController() {
+                                p.dismissViewControllerAnimated_completion(false, None);
+                            } else {
+                                presenting_dismiss
+                                    .dismissViewControllerAnimated_completion(false, None);
+                            }
                         }
+                        comp.call(());
                     });
                     // ONE animation from wherever the sheet currently sits: the sheet
                     // travels all the way down, fully opaque and simply moving, while the
@@ -4690,7 +4697,7 @@ mod imp {
             }
             let mtm = objc2::MainThreadMarker::new().expect("cover ops run on main");
             let pres_probe = dispatch2::MainThreadBound::new(presenting.clone(), mtm);
-            let when = dispatch2::DispatchTime::try_from(std::time::Duration::from_millis(1500))
+            let when = dispatch2::DispatchTime::try_from(std::time::Duration::from_millis(600))
                 .unwrap_or(dispatch2::DispatchTime::NOW);
             let _ = dispatch2::DispatchQueue::main().after(when, move || {
                 let mtm = objc2::MainThreadMarker::new().expect("dispatched to main");
@@ -10897,7 +10904,7 @@ mod imp {
             }
             ModalOp::Cover(vc, tries) => {
                 if vc.presentingViewController().is_some() {
-                    if vc.isBeingDismissed() || tries < 30 {
+                    if vc.isBeingDismissed() || tries < 8 {
                         modal_defer_retry(ModalOp::Cover(vc, tries + 1));
                         return;
                     }
@@ -10933,7 +10940,12 @@ mod imp {
                 let mut top_opt = topmost_vc();
                 if let Some(ref top) = top_opt {
                     if Retained::as_ptr(top) as *const () == Retained::as_ptr(&vc) as *const () {
-                        top_opt = vc.presentingViewController();
+                        if let Some(p) = vc.presentingViewController() {
+                            unsafe { p.dismissViewControllerAnimated_completion(false, None); }
+                            top_opt = Some(p);
+                        } else {
+                            top_opt = WINDOW.with(|w| w.borrow().clone()).and_then(|w| w.rootViewController());
+                        }
                     }
                 }
                 let Some(top) = top_opt else {
@@ -10972,15 +10984,37 @@ mod imp {
                         s.frame().origin.y,
                     );
                 }
+                let mtm = objc2::MainThreadMarker::new().expect("cover ops run on main");
+                let entrance_fired = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
                 let completion = {
                     let (view, sheet) = (view.clone(), sheet.clone());
+                    let entrance_fired = entrance_fired.clone();
                     block2::RcBlock::new(move || {
-                        modal_end_transition();
-                        if let (Some(view), Some(sheet)) = (view.as_ref(), sheet.as_ref()) {
-                            cover_entrance(view.clone(), sheet.clone());
+                        if !entrance_fired.swap(true, std::sync::atomic::Ordering::Relaxed) {
+                            modal_end_transition();
+                            if let (Some(view), Some(sheet)) = (view.as_ref(), sheet.as_ref()) {
+                                cover_entrance(view.clone(), sheet.clone());
+                            }
                         }
                     })
                 };
+                let view_probe = view.clone().map(|v| dispatch2::MainThreadBound::new(v, mtm));
+                let sheet_probe = sheet.clone().map(|s| dispatch2::MainThreadBound::new(s, mtm));
+                let entrance_guard = entrance_fired.clone();
+                let when = dispatch2::DispatchTime::try_from(std::time::Duration::from_millis(250))
+                    .unwrap_or(dispatch2::DispatchTime::NOW);
+                let _ = dispatch2::DispatchQueue::main().after(when, move || {
+                    let mtm = objc2::MainThreadMarker::new().expect("dispatched to main");
+                    if !entrance_guard.swap(true, std::sync::atomic::Ordering::Relaxed) {
+                        log::warn!("cover present completion delayed — forcing entrance and modal_end_transition");
+                        modal_end_transition();
+                        let v_opt = view_probe.map(|p| p.get(mtm).clone());
+                        let s_opt = sheet_probe.map(|p| p.get(mtm).clone());
+                        if let (Some(view), Some(sheet)) = (v_opt, s_opt) {
+                            cover_entrance(view, sheet);
+                        }
+                    }
+                });
                 unsafe {
                     top.presentViewController_animated_completion(&vc, false, Some(&completion));
                 }
