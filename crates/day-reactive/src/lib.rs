@@ -316,12 +316,13 @@ fn track_read(rt: &mut Runtime, source: NodeKey) {
         if obs == source {
             return;
         }
-        if let Some(obs_node) = rt.nodes.get_mut(obs) {
-            if !obs_node.sources.contains(&source) {
-                if let Some(src_node) = rt.nodes.get_mut(source) {
-                    obs_node.sources.push(source);
-                    src_node.observers.push(obs);
-                }
+        let already = rt.nodes.get(obs).map(|n| n.sources.contains(&source)).unwrap_or(true);
+        if !already && rt.nodes.contains_key(source) {
+            if let Some(obs_node) = rt.nodes.get_mut(obs) {
+                obs_node.sources.push(source);
+            }
+            if let Some(src_node) = rt.nodes.get_mut(source) {
+                src_node.observers.push(obs);
             }
         }
     }
