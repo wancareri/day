@@ -316,10 +316,13 @@ fn track_read(rt: &mut Runtime, source: NodeKey) {
         if obs == source {
             return;
         }
-        let already = rt.nodes[obs].sources.contains(&source);
-        if !already {
-            rt.nodes[obs].sources.push(source);
-            rt.nodes[source].observers.push(obs);
+        if let Some(obs_node) = rt.nodes.get_mut(obs) {
+            if !obs_node.sources.contains(&source) {
+                if let Some(src_node) = rt.nodes.get_mut(source) {
+                    obs_node.sources.push(source);
+                    src_node.observers.push(obs);
+                }
+            }
         }
     }
 }
@@ -1110,8 +1113,9 @@ impl<T: 'static> Signal<T> {
         // THIS signal inside `f` succeeds instead of reporting a disposed node, and a panic in
         // `f` cannot strand it.
         let cell = with_rt(|rt| {
+            let val = rt.nodes.get(self.key).and_then(|n| n.value.clone())?;
             track_read(rt, self.key);
-            rt.nodes.get(self.key).and_then(|n| n.value.clone())
+            Some(val)
         })?;
         let value = cell.borrow();
         value.downcast_ref::<T>().map(f)

@@ -409,10 +409,9 @@ impl<B: Toolkit> Tree<B> {
         // Native wiring: every native root inside `child`'s subtree inserts under the nearest
         // native ancestor at its in-order position.
         let ancestor = self.native_ancestor(parent);
-        let anc_handle = self.nodes[ancestor]
-            .handle
-            .clone()
-            .expect("native ancestor");
+        let Some(anc_handle) = self.nodes.get(ancestor).and_then(|n| n.handle.clone()) else {
+            return;
+        };
         let mut roots = Vec::new();
         match self.nodes.get(child) {
             Some(cd) if cd.handle.is_some() => roots.push(child),
@@ -421,8 +420,9 @@ impl<B: Toolkit> Tree<B> {
         }
         for r in roots {
             let idx = self.native_index_for(ancestor, r);
-            let h = self.nodes[r].handle.clone().unwrap();
-            self.toolkit.insert(&anc_handle, &h, idx);
+            if let Some(h) = self.nodes.get(r).and_then(|n| n.handle.clone()) {
+                self.toolkit.insert(&anc_handle, &h, idx);
+            }
         }
         self.mark_needs_measure_impl(parent);
     }
@@ -1126,15 +1126,15 @@ impl<B: Toolkit> TreeOps for Tree<B> {
         }
         // Full native resync of the nearest native ancestor: rebuild in-order positions.
         let ancestor = self.native_ancestor(parent);
-        let anc_handle = self.nodes[ancestor]
-            .handle
-            .clone()
-            .expect("native ancestor");
+        let Some(anc_handle) = self.nodes.get(ancestor).and_then(|n| n.handle.clone()) else {
+            return;
+        };
         let mut desired = Vec::new();
         self.native_descendants(ancestor, &mut desired);
         for (i, r) in desired.iter().enumerate() {
-            let h = self.nodes[*r].handle.clone().unwrap();
-            self.toolkit.move_child(&anc_handle, &h, i);
+            if let Some(h) = self.nodes.get(*r).and_then(|n| n.handle.clone()) {
+                self.toolkit.move_child(&anc_handle, &h, i);
+            }
         }
         self.mark_needs_measure_impl(parent);
     }
