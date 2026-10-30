@@ -670,6 +670,18 @@ impl Button {
         self.native_style = day_spec::props::ButtonStyleSpec::Glass;
         self
     }
+
+    /// Play native haptic feedback when the button is tapped.
+    pub fn haptic(mut self, h: day_spec::Haptic) -> Self {
+        let prev = self.action;
+        self.action = Some(Rc::new(move || {
+            day_core::play_haptic(h);
+            if let Some(f) = &prev {
+                f();
+            }
+        }));
+        self
+    }
 }
 
 /// [`Button`]'s own builders, reachable THROUGH a decoration — the [`LabelBuilder`] pattern, for
@@ -682,6 +694,7 @@ pub trait ButtonBuilder: Sized {
     fn tint<M>(self, color: impl IntoReactive<day_spec::Color, M>) -> Self;
     fn compact(self) -> Self;
     fn glass(self) -> Self;
+    fn haptic(self, h: day_spec::Haptic) -> Self;
 }
 
 impl ButtonBuilder for Button {
@@ -706,6 +719,9 @@ impl ButtonBuilder for Button {
     fn glass(self) -> Self {
         Button::glass(self)
     }
+    fn haptic(self, h: day_spec::Haptic) -> Self {
+        Button::haptic(self, h)
+    }
 }
 
 impl<P: ButtonBuilder + Piece> ButtonBuilder for Decorated<P> {
@@ -729,6 +745,9 @@ impl<P: ButtonBuilder + Piece> ButtonBuilder for Decorated<P> {
     }
     fn glass(self) -> Self {
         self.map_inner(ButtonBuilder::glass)
+    }
+    fn haptic(self, h: day_spec::Haptic) -> Self {
+        self.map_inner(|p| p.haptic(h))
     }
 }
 

@@ -23,7 +23,8 @@ pub use day_spec::Renderer;
 pub use linkme;
 pub use render::fill_measure;
 
-// The piece vocabulary — one logical group per module, re-exported flat (see each module's docs).
+// Re-exported flat (see each module's docs).
+pub use day_spec::Haptic;
 mod canvas;
 mod containers;
 mod decorators;

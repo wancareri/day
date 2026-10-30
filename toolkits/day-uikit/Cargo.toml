@@ -38,6 +38,7 @@ objc2-ui-kit = { version = "0.3", features = [
     "UIGraphicsRenderer", "UIGraphicsImageRenderer", "UIImage",
     "UIButtonConfiguration", "UIBackgroundConfiguration",
     "UIVisualEffectView",
+    "UIActivityViewController",
     "UILabel", "UIControl", "UIButton", "UITextField", "UISwitch", "UISlider", "UIColor",
     "UIAlertController",
     "UIProgressView", "UIActivityIndicatorView",

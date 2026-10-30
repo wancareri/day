@@ -6247,6 +6247,16 @@ impl Toolkit for Gtk {
                     });
                 });
             }
+            PresentSpec::PreviewFile { path, .. } => {
+                let _ = std::process::Command::new("xdg-open").arg(path).spawn();
+            }
+            PresentSpec::Share { path, text, .. } => {
+                if let Some(p) = path {
+                    let _ = std::process::Command::new("xdg-open").arg(p).spawn();
+                } else if let Some(t) = text {
+                    println!("[share] {}", t);
+                }
+            }
         }
     }
 

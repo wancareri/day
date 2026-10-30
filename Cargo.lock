@@ -506,7 +506,9 @@ dependencies = [
  "day-macros",
  "day-mock",
  "day-model",
+ "day-part-biometrics",
  "day-part-clipboard",
+ "day-part-haptics",
  "day-part-prefs",
  "day-persistence",
  "day-pieces",
@@ -778,6 +780,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "day-part-biometrics"
+version = "0.4.3"
+dependencies = [
+ "block2",
+ "objc2",
+ "objc2-foundation",
+ "objc2-local-authentication",
+]
+
+[[package]]
 name = "day-part-clipboard"
 version = "0.4.3"
 dependencies = [
@@ -813,6 +825,7 @@ dependencies = [
  "day-android",
  "day-bridge",
  "day-build",
+ "day-spec",
  "objc2",
  "objc2-app-kit",
  "objc2-ui-kit",
@@ -3258,6 +3271,18 @@ checksum = "2a1e6550c4caed348956ce3370c9ffeca70bb1dbed4fa96112e7c6170e074586"
 dependencies = [
  "objc2",
  "objc2-core-foundation",
+]
+
+[[package]]
+name = "objc2-local-authentication"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e48e0b8b339e0d9d2ed4416b7f93f9d4daadff7d4dd797f89867cde11aeac607"
+dependencies = [
+ "block2",
+ "objc2",
+ "objc2-foundation",
+ "objc2-security",
 ]
 
 [[package]]

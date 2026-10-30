@@ -2784,6 +2784,7 @@ impl Toolkit for Qt {
                     parent,
                 )
             },
+            PresentSpec::Share { .. } | PresentSpec::PreviewFile { .. } => {}
         }
     }
 

@@ -3398,7 +3398,9 @@ fn present_json(spec: &PresentSpec) -> Option<String> {
             json_str(&mut j, &accept.join(","));
         }
         // Save rides its own FFI arm (bytes attached); reaching here means a non-web build.
-        PresentSpec::SaveFile { .. } => return None,
+        PresentSpec::SaveFile { .. }
+        | PresentSpec::Share { .. }
+        | PresentSpec::PreviewFile { .. } => return None,
     }
     j.push('}');
     Some(j)

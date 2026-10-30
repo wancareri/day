@@ -429,6 +429,18 @@ pub enum SurfaceRole {
     Glass,
 }
 
+/// A haptic-feedback style.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Haptic {
+    Light,
+    Medium,
+    Heavy,
+    Success,
+    Warning,
+    Error,
+    Selection,
+}
+
 pub const NAV_SIDEBAR_WIDTH: f64 = 240.0;
 
 /// Drag limits for a navigation host's sidebar pane, around [`NAV_SIDEBAR_WIDTH`]. Shared by the
@@ -4922,6 +4934,17 @@ pub mod present {
             src_path: String,
             filters: Vec<FileFilter>,
         },
+        /// System share sheet (iOS UIActivityViewController, Android ACTION_SEND, etc.).
+        Share {
+            path: Option<String>,
+            text: Option<String>,
+            url: Option<String>,
+        },
+        /// System file preview (iOS QLPreviewController / QuickLook, macOS Preview, etc.).
+        PreviewFile {
+            path: String,
+            title: Option<String>,
+        },
     }
 
     /// The user's answer to a presentation.
@@ -5035,6 +5058,8 @@ pub mod present {
                 | PresentSpec::Prompt { title, .. }
                 | PresentSpec::OpenFile { title, .. }
                 | PresentSpec::SaveFile { title, .. } => title,
+                PresentSpec::Share { .. } => "Share",
+                PresentSpec::PreviewFile { title, .. } => title.as_deref().unwrap_or("Preview"),
             }
         }
         pub fn message(&self) -> Option<&str> {

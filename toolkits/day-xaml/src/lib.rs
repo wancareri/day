@@ -2762,6 +2762,7 @@ impl Toolkit for Xaml {
                     self.window,
                 )
             },
+            PresentSpec::Share { .. } | PresentSpec::PreviewFile { .. } => {}
         }
     }
 

@@ -7542,6 +7542,26 @@ impl Toolkit for AppKit {
                 PRESENT_PANELS.with(|m| m.borrow_mut().insert(req, panel));
                 return;
             }
+            PresentSpec::PreviewFile { path, .. } => {
+                let nsurl = unsafe {
+                    objc2_foundation::NSURL::fileURLWithPath(&NSString::from_str(path))
+                };
+                unsafe {
+                    objc2_app_kit::NSWorkspace::sharedWorkspace().openURL(&nsurl);
+                }
+                return;
+            }
+            PresentSpec::Share { path, .. } => {
+                if let Some(p) = path {
+                    let nsurl = unsafe {
+                        objc2_foundation::NSURL::fileURLWithPath(&NSString::from_str(p))
+                    };
+                    unsafe {
+                        objc2_app_kit::NSWorkspace::sharedWorkspace().openURL(&nsurl);
+                    }
+                }
+                return;
+            }
             _ => {}
         }
         let alert = unsafe { objc2_app_kit::NSAlert::new(mtm) };
@@ -7613,8 +7633,11 @@ impl Toolkit for AppKit {
                     })
                 })
             }
-            // File pickers returned early above.
-            PresentSpec::OpenFile { .. } | PresentSpec::SaveFile { .. } => unreachable!(),
+            // File pickers and share/preview returned early above.
+            PresentSpec::OpenFile { .. }
+            | PresentSpec::SaveFile { .. }
+            | PresentSpec::Share { .. }
+            | PresentSpec::PreviewFile { .. } => unreachable!(),
         };
         unsafe {
             alert.beginSheetModalForWindow_completionHandler(&window, Some(&handler));

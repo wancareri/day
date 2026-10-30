@@ -21,6 +21,7 @@ license.workspace = true
 # See docs/haptics.md + docs/extending.md.
 
 [dependencies]
+day-spec = { workspace = true }
 
 # iOS: UIKit's feedback generators. MainThreadMarker/MainThreadOnly come from objc2.
 [target.'cfg(target_os = "ios")'.dependencies]

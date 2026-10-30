@@ -1019,6 +1019,12 @@ impl<P: Piece> Decorated<P> {
     pub fn on_tap(self, f: impl Fn() + 'static) -> Self {
         self.push(op_on_tap(f))
     }
+    pub fn on_tap_haptic(self, h: day_spec::Haptic, f: impl Fn() + 'static) -> Self {
+        self.on_tap(move || {
+            day_core::play_haptic(h);
+            f();
+        })
+    }
     pub fn on_tap_at(self, f: impl Fn(day_spec::Point) + 'static) -> Self {
         self.push(op_on_tap_at(f))
     }
@@ -1285,6 +1291,11 @@ pub trait Decorate: Piece + Sized {
     /// Fire when this piece is tapped (bounding-box; shapes override with path-precise testing).
     fn on_tap(self, f: impl Fn() + 'static) -> Decorated<Self> {
         Decorated::new(self).on_tap(f)
+    }
+
+    /// Register a primary-tap closure with native haptic feedback.
+    fn on_tap_haptic(self, h: day_spec::Haptic, f: impl Fn() + 'static) -> Decorated<Self> {
+        Decorated::new(self).on_tap_haptic(h, f)
     }
 
     /// [`on_tap`](Self::on_tap), told WHERE — the point in the piece's own coordinate space,

@@ -10505,6 +10505,56 @@ mod imp {
                     };
                     present_doc_picker(req, m, picker);
                 }
+                PresentSpec::Share { path, text, url } => {
+                    if dayscript_driven() {
+                        return;
+                    }
+                    unsafe {
+                        let mut items: Vec<Retained<objc2::runtime::AnyObject>> = Vec::new();
+                        if let Some(p) = path {
+                            let nsurl = objc2_foundation::NSURL::fileURLWithPath(&NSString::from_str(p));
+                            items.push(Retained::into_super(Retained::into_super(nsurl)).into());
+                        }
+                        if let Some(t) = text {
+                            items.push(Retained::into_super(NSString::from_str(t)).into());
+                        }
+                        if let Some(u) = url {
+                            if let Some(nsurl) = objc2_foundation::NSURL::URLWithString(&NSString::from_str(u)) {
+                                items.push(Retained::into_super(Retained::into_super(nsurl)).into());
+                            }
+                        }
+                        let activity = objc2_ui_kit::UIActivityViewController::initWithActivityItems_applicationActivities(
+                            objc2_ui_kit::UIActivityViewController::alloc(m),
+                            &objc2_foundation::NSArray::from_retained_slice(&items),
+                            None,
+                        );
+                        let root_vc = WINDOW
+                            .with(|w| w.borrow().clone())
+                            .and_then(|w| w.rootViewController());
+                        if let Some(root) = root_vc {
+                            let mut top = root;
+                            while let Some(presented) = top.presentedViewController() {
+                                top = presented;
+                            }
+                            top.presentViewController_animated_completion(&activity, true, None);
+                        }
+                    }
+                }
+                PresentSpec::PreviewFile { path, .. } => {
+                    if dayscript_driven() {
+                        return;
+                    }
+                    let nsurl = unsafe {
+                        objc2_foundation::NSURL::fileURLWithPath(&NSString::from_str(path))
+                    };
+                    unsafe {
+                        objc2_ui_kit::UIApplication::sharedApplication(m).openURL_options_completionHandler(
+                            &nsurl,
+                            &objc2_foundation::NSDictionary::new(),
+                            None,
+                        );
+                    }
+                }
             }
         }
 

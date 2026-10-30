@@ -27,9 +27,19 @@ compile_error!("day: enable exactly one backend feature");
 /// cold launcher shortcut. The route grammar is what `day::routes!` keys and dayscript speak.
 pub use day_core::request_route;
 pub use day_core::{
-    AnyPiece, BuildCx, Piece, PieceSeq, TaskHandle, dark_mode, safe_area, set_app_badge,
+    AnyPiece, BuildCx, Piece, PieceSeq, TaskHandle, dark_mode, open_url, safe_area, set_app_badge,
     set_appearance, size_class, sleep, task,
 };
+pub use day_pieces::{preview_file, share, share_file, share_text};
+pub use day_spec::Haptic;
+
+pub mod biometrics {
+    pub use day_part_biometrics::*;
+}
+
+pub mod haptics {
+    pub use day_part_haptics::*;
+}
 pub use day_core::{AssetDir, AssetName, FontFamily, ImageName, Resource, VectorName, resource};
 pub use day_spec::AppBadge;
 /// An app-writable scratch directory. The OS temp dir is NOT app-writable on every target
@@ -459,7 +469,7 @@ pub mod prelude {
         LocalizedText, install as install_locales, matches_search, set_locale, sort_localized, tr,
     };
     pub use day_pieces::prelude::*;
-    pub use day_spec::{Lifecycle, Size, WindowOptions};
+    pub use day_spec::{Lifecycle, Size, WindowOptions, Haptic};
     // Canvas drawing vocabulary (docs/canvas.md): arbitrary paths and their fill rule, plus the
     // stroke style a dashed or round-capped line needs.
     pub use day_spec::{FillRule, LineCap, LineJoin, Path, PathSeg, StrokeStyle};
@@ -607,6 +617,7 @@ fn start<P: day_spec::Platform, R: Piece>(
     mut options: WindowOptions,
     root: impl FnOnce() -> R + 'static,
 ) {
+    day_core::set_haptic_hook(day_part_haptics::play);
     day_fluent::add_launch_locales(&backend.locale_hints());
     // The app's catalog, now that the hints are in: registering it here rather than inside the
     // root builder is what lets a title — drawn before any piece exists — come out of the

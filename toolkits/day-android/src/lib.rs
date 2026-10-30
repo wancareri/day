@@ -2081,6 +2081,7 @@ mod imp {
                         ],
                     );
                 }),
+                PresentSpec::Share { .. } | PresentSpec::PreviewFile { .. } => {}
             }
         }
 

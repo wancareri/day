@@ -554,3 +554,28 @@ fn sanitize_name(name: &str) -> String {
         s
     }
 }
+
+/// Open the system share sheet (iOS UIActivityViewController, Android ACTION_SEND, etc.).
+pub async fn share(path: Option<String>, text: Option<String>, url: Option<String>) {
+    let spec = PresentSpec::Share { path, text, url };
+    let _ = day_core::present(spec).await;
+}
+
+/// Share a local file through the system share sheet.
+pub async fn share_file(path: impl Into<String>) {
+    share(Some(path.into()), None, None).await;
+}
+
+/// Share plain text through the system share sheet.
+pub async fn share_text(text: impl Into<String>) {
+    share(None, Some(text.into()), None).await;
+}
+
+/// Open the native document/file previewer (iOS QLPreviewController / QuickLook, desktop default viewer).
+pub async fn preview_file(path: impl Into<String>, title: Option<String>) {
+    let spec = PresentSpec::PreviewFile {
+        path: path.into(),
+        title,
+    };
+    let _ = day_core::present(spec).await;
+}

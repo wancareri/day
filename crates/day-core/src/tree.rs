@@ -2336,6 +2336,22 @@ pub fn open_url(url: &str) {
     with_tree(|t| t.open_url(url));
 }
 
+static HAPTIC_HOOK: std::sync::Mutex<Option<fn(day_spec::Haptic)>> = std::sync::Mutex::new(None);
+
+pub fn set_haptic_hook(f: fn(day_spec::Haptic)) {
+    if let Ok(mut l) = HAPTIC_HOOK.lock() {
+        *l = Some(f);
+    }
+}
+
+pub fn play_haptic(h: day_spec::Haptic) {
+    if let Ok(l) = HAPTIC_HOOK.lock() {
+        if let Some(f) = *l {
+            f(h);
+        }
+    }
+}
+
 /// Tell layout that a node's intrinsic size may have changed. For tweaks (docs/tweaks.md):
 /// after a native call that alters a widget's preferred size (fonts, tick marks, bezel styles),
 /// the measure cache along the node's path must be invalidated — Day can't see native mutations

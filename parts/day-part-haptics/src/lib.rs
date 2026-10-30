@@ -21,32 +21,7 @@
 //! never panics. On hardware without a Taptic engine (an iOS Simulator, a Mac without a Force Touch
 //! trackpad, an Android device whose `Vibrator.hasVibrator()` is false) the call is silently ignored.
 
-/// A haptic-feedback style, modeled on iOS's three feedback-generator families so the same call maps
-/// to a sensible native pattern everywhere.
-///
-/// - [`Light`](Haptic::Light) / [`Medium`](Haptic::Medium) / [`Heavy`](Haptic::Heavy) are physical
-///   *impact* intensities (iOS `UIImpactFeedbackGenerator`).
-/// - [`Success`](Haptic::Success) / [`Warning`](Haptic::Warning) / [`Error`](Haptic::Error) are
-///   *notification* outcomes (iOS `UINotificationFeedbackGenerator`).
-/// - [`Selection`](Haptic::Selection) is the light tick played as a value scrolls past a detent (iOS
-///   `UISelectionFeedbackGenerator`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Haptic {
-    /// A light impact — the subtlest bump.
-    Light,
-    /// A medium impact.
-    Medium,
-    /// A heavy impact — the most forceful bump.
-    Heavy,
-    /// A "task succeeded" notification.
-    Success,
-    /// A "something needs attention" notification.
-    Warning,
-    /// A "task failed" notification.
-    Error,
-    /// A selection changed (a value ticked past a detent).
-    Selection,
-}
+pub use day_spec::Haptic;
 
 /// Play a haptic through the platform's native API. Fire-and-forget: no return value, never panics,
 /// and a no-op on platforms/hardware without a haptic engine (see [`is_supported`]).
