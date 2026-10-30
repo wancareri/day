@@ -232,7 +232,7 @@ fn apply_button_style(btn: &gtk4::Button, style: day_spec::props::ButtonStyleSpe
         }
     }
     match style {
-        S::Prominent => btn.add_css_class("suggested-action"),
+        S::Prominent | S::Glass => btn.add_css_class("suggested-action"),
         S::Tinted(c) => {
             let key = hex(c);
             let class = format!("day-tint-{key}");
@@ -3211,10 +3211,13 @@ impl Toolkit for Gtk {
             Some(Builtin::Container) => {
                 let w: Handle = gtk4::Fixed::new().upcast();
                 if let Some(p) = props.downcast_ref::<ContainerProps>() {
-                    if p.role == Some(day_spec::SurfaceRole::SectionCard) {
+                    if p.role == Some(day_spec::SurfaceRole::SectionCard) || p.role == Some(day_spec::SurfaceRole::Glass) {
                         // libadwaita's own grouped-card treatment — rounded, elevated, and
                         // theme-adaptive (follows the Adwaita light/dark stylesheet).
                         w.add_css_class("card");
+                        if p.corner_radius > 0.0 {
+                            apply_surface(&w, None, p.corner_radius, true);
+                        }
                     } else if p.background.is_some() || p.corner_radius > 0.0 || p.clips {
                         apply_surface(&w, p.background, p.corner_radius, p.clips);
                     }
@@ -4687,6 +4690,7 @@ impl Toolkit for Gtk {
                         }
                         TextFieldPatch::Placeholder(t) => entry.set_placeholder_text(Some(t)),
                         TextFieldPatch::Enabled(e) => entry.set_sensitive(*e),
+                        TextFieldPatch::Secure(s) => entry.set_visibility(!*s),
                     }
                 }
             }

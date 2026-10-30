@@ -420,6 +420,13 @@ pub enum SurfaceRole {
     /// system fill, libadwaita `.card`, Qt `palette(alternate-base)`, UIKit tertiary system
     /// fill, Material surface-container, XAML card background brush.
     SectionCard,
+    /// A liquid glass / frosted material surface:
+    /// - UIKit (iOS): UIVisualEffectView (UIBlurEffectStyle::SystemUltraThinMaterial, or iOS 26+ glassEffect)
+    /// - AppKit (macOS): NSVisualEffectView
+    /// - XAML (Windows): AcrylicBrush / Mica
+    /// - Material (Android): Surface container / Blur
+    /// - GTK/Qt/Web: backdrop blur / translucent material
+    Glass,
 }
 
 pub const NAV_SIDEBAR_WIDTH: f64 = 240.0;
@@ -4120,6 +4127,13 @@ pub mod props {
         /// whose buttons already hug their title (AppKit, UIKit's plain button, Qt) draws its
         /// ordinary button.
         Compact,
+        /// A native liquid glass / material button.
+        /// - iOS 26+ / macOS 26+: uses the native glassEffect / liquid glass styling.
+        /// - iOS <= 18: falls back to native prominent / filled button.
+        /// - Windows: uses WinUI Accent / Acrylic button.
+        /// - Android: uses Material 3 Tonal / Elevated button.
+        /// - Linux: uses GTK4 suggested-action / Qt prominent button.
+        Glass,
     }
 
     impl ButtonStyleSpec {

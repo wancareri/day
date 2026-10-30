@@ -659,6 +659,17 @@ impl Button {
         self.native_style = day_spec::props::ButtonStyleSpec::Compact;
         self
     }
+
+    /// A native liquid glass / material button:
+    /// - iOS 26+ / macOS 26+: uses the native glassEffect / liquid glass styling.
+    /// - iOS <= 18: falls back to native prominent/filled button.
+    /// - Windows: uses WinUI Accent / Acrylic button.
+    /// - Android: uses Material 3 Tonal / Elevated button.
+    /// - Linux: uses GTK4 suggested-action / Qt prominent button.
+    pub fn glass(mut self) -> Self {
+        self.native_style = day_spec::props::ButtonStyleSpec::Glass;
+        self
+    }
 }
 
 /// [`Button`]'s own builders, reachable THROUGH a decoration — the [`LabelBuilder`] pattern, for
@@ -670,6 +681,7 @@ pub trait ButtonBuilder: Sized {
     fn prominent(self) -> Self;
     fn tint<M>(self, color: impl IntoReactive<day_spec::Color, M>) -> Self;
     fn compact(self) -> Self;
+    fn glass(self) -> Self;
 }
 
 impl ButtonBuilder for Button {
@@ -691,6 +703,9 @@ impl ButtonBuilder for Button {
     fn compact(self) -> Self {
         Button::compact(self)
     }
+    fn glass(self) -> Self {
+        Button::glass(self)
+    }
 }
 
 impl<P: ButtonBuilder + Piece> ButtonBuilder for Decorated<P> {
@@ -711,6 +726,9 @@ impl<P: ButtonBuilder + Piece> ButtonBuilder for Decorated<P> {
     }
     fn compact(self) -> Self {
         self.map_inner(ButtonBuilder::compact)
+    }
+    fn glass(self) -> Self {
+        self.map_inner(ButtonBuilder::glass)
     }
 }
 

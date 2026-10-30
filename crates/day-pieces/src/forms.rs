@@ -408,3 +408,26 @@ impl<Inner: FormSectionBuilder + Piece> FormSectionBuilder for Decorated<Inner> 
         self.map_inner(|inner_piece| inner_piece.title(t))
     }
 }
+
+/// A native card with rounded corners and liquid glass / material surface.
+/// On iOS: UIVisualEffectView (UltraThinMaterial on iOS <= 18, glassEffect on iOS 26+).
+/// On Android: Material 3 surface-container.
+/// On Windows: WinUI Acrylic.
+/// On Linux: GTK/Qt card with theme elevation.
+pub fn card(content: impl Piece + 'static) -> impl Piece {
+    content
+        .padding(16.0)
+        .glass_radius(16.0)
+}
+
+/// A standard page / section header with a title and subtitle.
+pub fn header<M1, M2>(title: impl IntoText<M1>, subtitle: impl IntoText<M2>) -> impl Piece {
+    column((
+        label(title).font(day_spec::Font::LargeTitle),
+        label(subtitle)
+            .font(day_spec::Font::Subheadline)
+            .color(day_spec::Color::rgba(0.5, 0.5, 0.5, 0.85)),
+    ))
+    .spacing(4.0)
+    .padding(16.0)
+}

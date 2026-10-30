@@ -6488,6 +6488,15 @@ mod imp {
                     config.setBaseForegroundColor(Some(&uicolor(S::on_tint(c))));
                     config
                 }
+                S::Glass => {
+                    if os_at_least(26) {
+                        // iOS 26+: modern tinted button with liquid glass vibrancy
+                        UIButtonConfiguration::tintedButtonConfiguration(mtm)
+                    } else {
+                        // iOS <= 18: standard native filled/prominent button
+                        UIButtonConfiguration::filledButtonConfiguration(mtm)
+                    }
+                }
             };
             config.setTitle(Some(&NSString::from_str(title)));
             btn.setConfiguration(Some(&config));
@@ -7749,7 +7758,36 @@ mod imp {
                     // A mismatched payload still yields a usable (undecorated) container;
                     // `props_of` reports it.
                     if let Some(p) = day_spec::props_of::<ContainerProps>(kind, "uikit", props) {
-                        if p.role == Some(day_spec::SurfaceRole::SectionCard) {
+                        if p.role == Some(day_spec::SurfaceRole::Glass) {
+                            unsafe {
+                                let tag: objc2::ffi::NSInteger = 9991;
+                                if v.viewWithTag(tag).is_none() {
+                                    let blur = objc2_ui_kit::UIBlurEffect::effectWithStyle(
+                                        objc2_ui_kit::UIBlurEffectStyle::SystemUltraThinMaterial,
+                                        mtm,
+                                    );
+                                    let effect_view = objc2_ui_kit::UIVisualEffectView::initWithEffect(
+                                        objc2_ui_kit::UIVisualEffectView::alloc(mtm),
+                                        Some(&blur),
+                                    );
+                                    effect_view.setTag(tag);
+                                    effect_view.setFrame(v.bounds());
+                                    effect_view.setAutoresizingMask(objc2_ui_kit::UIViewAutoresizing(
+                                        objc2_ui_kit::UIViewAutoresizing::FlexibleWidth.0
+                                            | objc2_ui_kit::UIViewAutoresizing::FlexibleHeight.0,
+                                    ));
+                                    effect_view.setUserInteractionEnabled(false);
+                                    let layer = v.layer();
+                                    if p.corner_radius > 0.0 {
+                                        layer.setCornerRadius(p.corner_radius);
+                                    }
+                                    layer.setMasksToBounds(true);
+                                    v.insertSubview_atIndex(&effect_view, 0);
+                                    v.setBackgroundColor(Some(&UIColor::clearColor()));
+                                    v.setClipsToBounds(true);
+                                }
+                            }
+                        } else if p.role == Some(day_spec::SurfaceRole::SectionCard) {
                             // SectionCard sits transparently over the grouped page ground
                             // (`DayNavPageView`) while preserving rounded clipping (`corner_radius`
                             // + `masksToBounds`) for Liquid Glass and section layout.
@@ -7798,6 +7836,26 @@ mod imp {
                             unsafe {
                                 tabbar.setMode(objc2_ui_kit::UITabBarControllerMode::TabSidebar);
                             }
+                        }
+                        // Liquid Glass: configure transparent blurred UITabBarAppearance automatically
+                        unsafe {
+                            let bar = tabbar.tabBar();
+                            let clear = UIColor::clearColor();
+                            bar.setTranslucent(true);
+                            bar.setBackgroundColor(Some(&clear));
+                            let tab_appearance_class = objc2::class!(UITabBarAppearance);
+                            let tab_app: objc2::rc::Retained<objc2::runtime::AnyObject> =
+                                objc2::msg_send![tab_appearance_class, new];
+                            let blur_class = objc2::class!(UIBlurEffect);
+                            let blur: objc2::rc::Retained<objc2::runtime::AnyObject> =
+                                objc2::msg_send![blur_class, effectWithStyle: 6isize]; // SystemUltraThinMaterial
+                            let _: () = objc2::msg_send![&*tab_app, configureWithTransparentBackground];
+                            let _: () = objc2::msg_send![&*tab_app, setBackgroundEffect: Some(&*blur)];
+                            let _: () = objc2::msg_send![&*tab_app, setBackgroundColor: &*clear];
+                            let _: () = objc2::msg_send![&*tab_app, setShadowColor: &*clear];
+
+                            let _: () = objc2::msg_send![&*bar, setStandardAppearance: &*tab_app];
+                            let _: () = objc2::msg_send![&*bar, setScrollEdgeAppearance: &*tab_app];
                         }
                         if let Some(root_vc) = &root_vc {
                             unsafe {

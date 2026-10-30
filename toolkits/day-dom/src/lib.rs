@@ -218,7 +218,7 @@ fn apply_button_style(el: u32, style: ButtonStyleSpec) {
     class(el, "tinted", false);
     class(el, "compact", false);
     match style {
-        ButtonStyleSpec::Prominent => class(el, "prominent", true),
+        ButtonStyleSpec::Prominent | ButtonStyleSpec::Glass => class(el, "prominent", true),
         ButtonStyleSpec::Bordered => class(el, "bordered", true),
         ButtonStyleSpec::Compact => class(el, "compact", true),
         ButtonStyleSpec::Tinted(c) => {

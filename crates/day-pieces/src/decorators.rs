@@ -777,6 +777,29 @@ fn op_background(color: Reactive<Color>) -> impl FnOnce(Build) -> Build {
     }
 }
 
+fn op_glass(radius: f64) -> impl FnOnce(Build) -> Build {
+    move |inner| {
+        Box::new(move |cx| {
+            let node = cx.native(
+                kinds::CONTAINER,
+                &ContainerProps {
+                    background: None,
+                    corner_radius: radius,
+                    clips: radius > 0.0,
+                    role: Some(day_spec::SurfaceRole::Glass),
+                },
+                Rc::new(FillThrough),
+                Flex::default(),
+                Boundary::No,
+            );
+            cx.under(node, |cx| {
+                let _ = inner(cx);
+            });
+            node
+        })
+    }
+}
+
 fn op_corner_radius(radius: f64) -> impl FnOnce(Build) -> Build {
     move |inner| {
         Box::new(move |cx| {
@@ -1056,6 +1079,12 @@ impl<P: Piece> Decorated<P> {
     }
     pub fn background<M>(self, color: impl IntoReactive<Color, M>) -> Self {
         self.push(op_background(color.into_reactive()))
+    }
+    pub fn glass(self) -> Self {
+        self.push(op_glass(0.0))
+    }
+    pub fn glass_radius(self, radius: f64) -> Self {
+        self.push(op_glass(radius))
     }
     pub fn corner_radius(self, radius: f64) -> Self {
         self.push(op_corner_radius(radius))
@@ -1386,6 +1415,21 @@ pub trait Decorate: Piece + Sized {
     /// colored surface and with [`Self::padding`] for interior inset.
     fn background<M>(self, color: impl IntoReactive<Color, M>) -> Decorated<Self> {
         Decorated::new(self).background(color)
+    }
+
+    /// Wrap the piece in a native liquid glass / frosted material surface:
+    /// - iOS: UIVisualEffectView (UltraThinMaterial on iOS <= 18, glassEffect on iOS 26+)
+    /// - macOS: NSVisualEffectView
+    /// - Windows: AcrylicBrush / Mica
+    /// - Android: Material 3 Surface / Blur
+    /// - Linux / Web: Translucent backdrop blur
+    fn glass(self) -> Decorated<Self> {
+        Decorated::new(self).glass()
+    }
+
+    /// Wrap the piece in a native liquid glass surface with rounded corners.
+    fn glass_radius(self, radius: f64) -> Decorated<Self> {
+        Decorated::new(self).glass_radius(radius)
     }
 
     /// Round the piece's corners to `radius` points, clipping its background and content to the

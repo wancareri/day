@@ -711,7 +711,7 @@ fn apply_button_style(h: *mut c_void, style: day_spec::props::ButtonStyleSpec) {
         // A XAML Button pads a one-glyph title modestly; Compact takes the stock look.
         S::Automatic | S::Compact => (0, day_spec::Color::CLEAR),
         S::Bordered => (1, day_spec::Color::CLEAR),
-        S::Prominent => (2, day_spec::Color::CLEAR),
+        S::Prominent | S::Glass => (2, day_spec::Color::CLEAR),
         S::Tinted(c) => (3, c),
     };
     // SAFETY: `h` is a live Button handle from `day_xaml_button_new`; the shim only reads the
@@ -1485,7 +1485,7 @@ impl Toolkit for Xaml {
                 Some(Builtin::Container) => {
                     let h = ffi::day_xaml_container_new();
                     if let Some(p) = props.downcast_ref::<ContainerProps>() {
-                        if p.role == Some(day_spec::SurfaceRole::SectionCard) {
+                        if p.role == Some(day_spec::SurfaceRole::SectionCard) || p.role == Some(day_spec::SurfaceRole::Glass) {
                             // Theme-resource card brush — tracks light/dark automatically.
                             ffi::day_xaml_container_set_card(h, p.corner_radius);
                         }

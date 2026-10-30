@@ -870,7 +870,7 @@ mod imp {
         let (kind, fill) = match style {
             S::Automatic => (0, day_spec::Color::CLEAR),
             S::Bordered => (1, day_spec::Color::CLEAR),
-            S::Prominent => (2, day_spec::Color::CLEAR),
+            S::Prominent | S::Glass => (2, day_spec::Color::CLEAR),
             S::Tinted(c) => (3, c),
             // Kind 4 drops Material's 88 dp minimum width and its wide insets (docs/buttons.md).
             S::Compact => (4, day_spec::Color::CLEAR),
@@ -2113,7 +2113,7 @@ mod imp {
                         ))
                     });
                     if let Some(p) = props.downcast_ref::<ContainerProps>() {
-                        if p.role == Some(day_spec::SurfaceRole::SectionCard) {
+                        if p.role == Some(day_spec::SurfaceRole::SectionCard) || p.role == Some(day_spec::SurfaceRole::Glass) {
                             let d = DENSITY.with(|x| x.get());
                             call_void(
                                 "setSectionCard",

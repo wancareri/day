@@ -3634,7 +3634,7 @@ fn apply_button_style(btn: &objc2_app_kit::NSButton, style: day_spec::props::But
             S::Tinted(c) => btn.setBezelColor(Some(&nscolor(c))),
             // Bordered is the stock NSButton look already; Automatic asks for nothing, and an
             // NSButton hugs a one-glyph title already, so Compact asks for nothing either.
-            S::Bordered | S::Automatic | S::Compact => {}
+            S::Bordered | S::Automatic | S::Compact | S::Glass => {}
         }
     }
     BUTTON_STYLES.with(|m| m.borrow_mut().insert(ptr_of(btn), style));
@@ -4861,7 +4861,7 @@ impl Toolkit for AppKit {
             Some(Builtin::Container) => {
                 let v = DayFlipped::new(mtm);
                 if let Some(p) = props.downcast_ref::<ContainerProps>() {
-                    if p.role == Some(day_spec::SurfaceRole::SectionCard) {
+                    if p.role == Some(day_spec::SurfaceRole::SectionCard) || p.role == Some(day_spec::SurfaceRole::Glass) {
                         v.set_section_card(p.corner_radius);
                     } else if p.background.is_some() || p.corner_radius > 0.0 || p.clips {
                         v.set_surface(p.background, p.corner_radius, p.clips);

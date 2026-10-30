@@ -153,7 +153,7 @@ fn apply_button_style(w: *mut c_void, style: day_spec::props::ButtonStyleSpec) {
         // A QPushButton hugs a one-glyph title already, so Compact is the stock look.
         S::Automatic | S::Compact => (0, day_spec::Color::CLEAR),
         S::Bordered => (1, day_spec::Color::CLEAR),
-        S::Prominent => (2, day_spec::Color::CLEAR),
+        S::Prominent | S::Glass => (2, day_spec::Color::CLEAR),
         S::Tinted(c) => (3, c),
     };
     // SAFETY: `w` is a live QPushButton created by `day_qt_button_new`; the shim only reads the
@@ -1622,7 +1622,7 @@ impl Toolkit for Qt {
                 Some(Builtin::Container) => {
                     let w = ffi::day_qt_container_new();
                     if let Some(p) = props.downcast_ref::<ContainerProps>()
-                        && p.role == Some(day_spec::SurfaceRole::SectionCard)
+                        && (p.role == Some(day_spec::SurfaceRole::SectionCard) || p.role == Some(day_spec::SurfaceRole::Glass))
                     {
                         // A translucent neutral over the window color: subtle in any palette,
                         // and it follows the platform / forced (DAY_THEME) color scheme.
