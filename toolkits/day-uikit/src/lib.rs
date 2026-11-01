@@ -6550,17 +6550,8 @@ mod imp {
                         config.setCornerStyle(objc2_ui_kit::UIButtonConfigurationCornerStyle::Capsule);
                         config
                     } else {
-                        let config = UIButtonConfiguration::plainButtonConfiguration(mtm);
-                        let bg = objc2_ui_kit::UIBackgroundConfiguration::clearConfiguration(mtm);
-                        let blur = objc2_ui_kit::UIBlurEffect::effectWithStyle(
-                            objc2_ui_kit::UIBlurEffectStyle::SystemUltraThinMaterial,
-                            mtm,
-                        );
-                        bg.setVisualEffect(Some(&blur));
-                        bg.setBackgroundColor(Some(&UIColor::colorWithWhite_alpha(1.0, 0.15)));
-                        config.setBackground(&bg);
+                        let config = UIButtonConfiguration::borderedProminentButtonConfiguration(mtm);
                         config.setCornerStyle(objc2_ui_kit::UIButtonConfigurationCornerStyle::Capsule);
-                        config.setBaseForegroundColor(Some(&UIColor::labelColor()));
                         config
                     }
                 }
