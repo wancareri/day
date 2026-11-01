@@ -6524,9 +6524,16 @@ mod imp {
                 S::Automatic | S::Compact => {
                     btn.setConfiguration(None);
                     btn.setTitle_forState(Some(&NSString::from_str(title)), UIControlState::Normal);
+                    if let Some(lbl) = btn.titleLabel() {
+                        lbl.setFont(Some(&objc2_ui_kit::UIFont::preferredFontForTextStyle(objc2_ui_kit::UIFontTextStyleBody)));
+                    }
                     return;
                 }
-                S::Prominent => UIButtonConfiguration::borderedProminentButtonConfiguration(mtm),
+                S::Prominent => {
+                    let config = UIButtonConfiguration::borderedProminentButtonConfiguration(mtm);
+                    config.setCornerStyle(objc2_ui_kit::UIButtonConfigurationCornerStyle::Capsule);
+                    config
+                }
                 S::Bordered => UIButtonConfiguration::borderedButtonConfiguration(mtm),
                 S::Tinted(c) => {
                     let config = UIButtonConfiguration::filledButtonConfiguration(mtm);
@@ -8542,6 +8549,9 @@ mod imp {
                     let target = DayTarget::new(mtm, id);
                     let tf = unsafe { UITextField::new(mtm) };
                     unsafe {
+                        let sys_font = objc2_ui_kit::UIFont::preferredFontForTextStyle(objc2_ui_kit::UIFontTextStyleBody);
+                        tf.setFont(Some(&sys_font));
+                        let _: () = objc2::msg_send![&*tf, setAdjustsFontForContentSizeCategory: true];
                         tf.setText(Some(&NSString::from_str(&p.text)));
                         tf.setPlaceholder(Some(&NSString::from_str(&p.placeholder)));
                         tf.setBorderStyle(UITextBorderStyle::RoundedRect);
