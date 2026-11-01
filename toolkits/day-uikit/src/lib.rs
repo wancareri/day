@@ -6532,7 +6532,6 @@ mod imp {
                 S::Prominent => {
                     let config = UIButtonConfiguration::filledButtonConfiguration(mtm);
                     config.setCornerStyle(objc2_ui_kit::UIButtonConfigurationCornerStyle::Capsule);
-                    config.setButtonSize(objc2_ui_kit::UIButtonConfigurationSize::Large);
                     let bg_color = objc2_ui_kit::UIColor::colorWithRed_green_blue_alpha(
                         36.0 / 255.0,
                         139.0 / 255.0,
@@ -6547,7 +6546,6 @@ mod imp {
                 S::Tinted(c) => {
                     let config = UIButtonConfiguration::filledButtonConfiguration(mtm);
                     config.setCornerStyle(objc2_ui_kit::UIButtonConfigurationCornerStyle::Capsule);
-                    config.setButtonSize(objc2_ui_kit::UIButtonConfigurationSize::Large);
                     config.setBaseBackgroundColor(Some(&uicolor(c)));
                     config.setBaseForegroundColor(Some(&uicolor(S::on_tint(c))));
                     config
@@ -6578,20 +6576,26 @@ mod imp {
                         bg.setBackgroundColor(Some(&objc2_ui_kit::UIColor::colorWithWhite_alpha(1.0, 0.12)));
                         config.setBackground(&bg);
                         config.setCornerStyle(objc2_ui_kit::UIButtonConfigurationCornerStyle::Capsule);
-                        config.setButtonSize(objc2_ui_kit::UIButtonConfigurationSize::Large);
                         config
                     }
                 }
             };
             use objc2::AllocAnyThread as _;
             use objc2_foundation::{NSMutableAttributedString, NSRange};
-            let font = objc2_ui_kit::UIFont::boldSystemFontOfSize(17.0);
+            let font = unsafe { objc2_ui_kit::UIFont::systemFontOfSize_weight(17.0, objc2_ui_kit::UIFontWeightSemibold) };
             let ns = NSString::from_str(title);
             let attr_s = NSMutableAttributedString::initWithString(NSMutableAttributedString::alloc(), &ns);
             let whole = NSRange::new(0, ns.length());
             attr_s.addAttribute_value_range(objc2_ui_kit::NSFontAttributeName, &font, whole);
+            attr_s.addAttribute_value_range(objc2_ui_kit::NSForegroundColorAttributeName, &objc2_ui_kit::UIColor::whiteColor(), whole);
             config.setAttributedTitle(Some(&attr_s));
             btn.setConfiguration(Some(&config));
+            if let Some(tl) = btn.titleLabel() {
+                unsafe {
+                    tl.setFont(Some(&font));
+                    tl.setTextColor(Some(&objc2_ui_kit::UIColor::whiteColor()));
+                }
+            }
         }
     }
 
@@ -9082,13 +9086,18 @@ mod imp {
                                 if let Some(config) = btn.configuration() {
                                     use objc2::AllocAnyThread as _;
                                     use objc2_foundation::{NSMutableAttributedString, NSRange};
-                                    let font = objc2_ui_kit::UIFont::boldSystemFontOfSize(17.0);
+                                    let font = objc2_ui_kit::UIFont::systemFontOfSize_weight(17.0, objc2_ui_kit::UIFontWeightSemibold);
                                     let ns = NSString::from_str(t);
                                     let attr_s = NSMutableAttributedString::initWithString(NSMutableAttributedString::alloc(), &ns);
                                     let whole = NSRange::new(0, ns.length());
                                     attr_s.addAttribute_value_range(objc2_ui_kit::NSFontAttributeName, &font, whole);
+                                    attr_s.addAttribute_value_range(objc2_ui_kit::NSForegroundColorAttributeName, &objc2_ui_kit::UIColor::whiteColor(), whole);
                                     config.setAttributedTitle(Some(&attr_s));
                                     btn.setConfiguration(Some(&config));
+                                    if let Some(tl) = btn.titleLabel() {
+                                        tl.setFont(Some(&font));
+                                        tl.setTextColor(Some(&objc2_ui_kit::UIColor::whiteColor()));
+                                    }
                                 } else {
                                     btn.setTitle_forState(
                                         Some(&NSString::from_str(t)),
