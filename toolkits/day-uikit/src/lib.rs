@@ -6583,7 +6583,14 @@ mod imp {
                     }
                 }
             };
-            config.setTitle(Some(&NSString::from_str(title)));
+            use objc2::AllocAnyThread as _;
+            use objc2_foundation::{NSMutableAttributedString, NSRange};
+            let font = objc2_ui_kit::UIFont::boldSystemFontOfSize(17.0);
+            let ns = NSString::from_str(title);
+            let attr_s = NSMutableAttributedString::initWithString(NSMutableAttributedString::alloc(), &ns);
+            let whole = NSRange::new(0, ns.length());
+            attr_s.addAttribute_value_range(objc2_ui_kit::NSFontAttributeName, &font, whole);
+            config.setAttributedTitle(Some(&attr_s));
             btn.setConfiguration(Some(&config));
         }
     }
@@ -9073,7 +9080,14 @@ mod imp {
                                 // A configured (bordered/prominent) button titles via its
                                 // configuration; a plain one via the state title.
                                 if let Some(config) = btn.configuration() {
-                                    config.setTitle(Some(&NSString::from_str(t)));
+                                    use objc2::AllocAnyThread as _;
+                                    use objc2_foundation::{NSMutableAttributedString, NSRange};
+                                    let font = objc2_ui_kit::UIFont::boldSystemFontOfSize(17.0);
+                                    let ns = NSString::from_str(t);
+                                    let attr_s = NSMutableAttributedString::initWithString(NSMutableAttributedString::alloc(), &ns);
+                                    let whole = NSRange::new(0, ns.length());
+                                    attr_s.addAttribute_value_range(objc2_ui_kit::NSFontAttributeName, &font, whole);
+                                    config.setAttributedTitle(Some(&attr_s));
                                     btn.setConfiguration(Some(&config));
                                 } else {
                                     btn.setTitle_forState(
