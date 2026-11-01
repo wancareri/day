@@ -863,6 +863,52 @@ mod imp {
         }
     }
 
+    use objc2_ui_kit::{UIDocumentInteractionController, UIDocumentInteractionControllerDelegate};
+
+    define_class!(
+        #[unsafe(super(NSObject))]
+        #[thread_kind = MainThreadOnly]
+        #[name = "DayDocPreviewDelegate"]
+        #[ivars = ()]
+        struct DayDocPreviewDelegate;
+
+        unsafe impl NSObjectProtocol for DayDocPreviewDelegate {}
+
+        unsafe impl UIDocumentInteractionControllerDelegate for DayDocPreviewDelegate {
+            #[unsafe(method_id(documentInteractionControllerViewControllerForPreview:))]
+            fn view_controller_for_preview(
+                &self,
+                _controller: &UIDocumentInteractionController,
+            ) -> Retained<UIViewController> {
+                let root_vc = WINDOW
+                    .with(|w| w.borrow().clone())
+                    .and_then(|w| w.rootViewController())
+                    .expect("root view controller present");
+                let mut top = root_vc;
+                while let Some(presented) = unsafe { top.presentedViewController() } {
+                    top = presented;
+                }
+                top
+            }
+
+            #[unsafe(method(documentInteractionControllerDidEndPreview:))]
+            fn did_end_preview(&self, _controller: &UIDocumentInteractionController) {
+                ACTIVE_DOC_PREVIEW.with(|c| *c.borrow_mut() = None);
+            }
+        }
+    );
+
+    impl DayDocPreviewDelegate {
+        fn new(mtm: MainThreadMarker) -> Retained<Self> {
+            let this = Self::alloc(mtm).set_ivars(());
+            unsafe { msg_send![super(this), init] }
+        }
+    }
+
+    thread_local! {
+        static ACTIVE_DOC_PREVIEW: std::cell::RefCell<Option<(Retained<UIDocumentInteractionController>, Retained<DayDocPreviewDelegate>)>> = const { std::cell::RefCell::new(None) };
+    }
+
     // ── The window toolbar on a phone (docs/toolbars.md) ───────────────────────────────
     //
     // Day's window toolbar model is one item list per window root, and where it lands depends
@@ -6489,13 +6535,18 @@ mod imp {
                     config
                 }
                 S::Glass => {
-                    if os_at_least(26) {
-                        // iOS 26+: modern tinted button with liquid glass vibrancy
-                        UIButtonConfiguration::tintedButtonConfiguration(mtm)
-                    } else {
-                        // iOS <= 18: standard native filled/prominent button
-                        UIButtonConfiguration::filledButtonConfiguration(mtm)
-                    }
+                    let config = UIButtonConfiguration::filledButtonConfiguration(mtm);
+                    let bg = config.background();
+                    let blur = objc2_ui_kit::UIBlurEffect::effectWithStyle(
+                        objc2_ui_kit::UIBlurEffectStyle::SystemUltraThinMaterial,
+                        mtm,
+                    );
+                    bg.setVisualEffect(Some(&blur));
+                    bg.setBackgroundColor(Some(&UIColor::colorWithWhite_alpha(1.0, 0.12)));
+                    config.setBackground(&bg);
+                    config.setCornerStyle(objc2_ui_kit::UIButtonConfigurationCornerStyle::Capsule);
+                    config.setBaseForegroundColor(Some(&UIColor::labelColor()));
+                    config
                 }
             };
             config.setTitle(Some(&NSString::from_str(title)));
@@ -9750,6 +9801,9 @@ mod imp {
                         f.origin.y + f.size.height / 2.0,
                     ));
                 }
+                if let Some(effect_view) = v.viewWithTag(9991) {
+                    effect_view.setFrame(v.bounds());
+                }
                 // Animated only: subviews sized by autoresizing (the frosted blur behind
                 // the status capsule) are laid out HERE, inside the animation block, so
                 // their frame change animates with the parent instead of snapping to the
@@ -10547,13 +10601,15 @@ mod imp {
                     let nsurl = unsafe {
                         objc2_foundation::NSURL::fileURLWithPath(&NSString::from_str(path))
                     };
+                    let doc = unsafe { UIDocumentInteractionController::interactionControllerWithURL(&nsurl, m) };
+                    let delegate = DayDocPreviewDelegate::new(m);
                     unsafe {
-                        objc2_ui_kit::UIApplication::sharedApplication(m).openURL_options_completionHandler(
-                            &nsurl,
-                            &objc2_foundation::NSDictionary::new(),
-                            None,
-                        );
+                        doc.setDelegate(Some(&objc2::runtime::ProtocolObject::from_ref(&*delegate)));
+                        doc.presentPreviewAnimated(true);
                     }
+                    ACTIVE_DOC_PREVIEW.with(|c| {
+                        *c.borrow_mut() = Some((doc, delegate));
+                    });
                 }
             }
         }
