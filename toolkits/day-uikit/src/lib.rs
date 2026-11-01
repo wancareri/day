@@ -6535,17 +6535,17 @@ mod imp {
                     config
                 }
                 S::Glass => {
-                    let config = UIButtonConfiguration::filledButtonConfiguration(mtm);
-                    let bg = config.background();
+                    let config = UIButtonConfiguration::plainButtonConfiguration(mtm);
+                    let bg = objc2_ui_kit::UIBackgroundConfiguration::clearConfiguration(mtm);
                     let blur = objc2_ui_kit::UIBlurEffect::effectWithStyle(
                         objc2_ui_kit::UIBlurEffectStyle::SystemUltraThinMaterial,
                         mtm,
                     );
                     bg.setVisualEffect(Some(&blur));
-                    bg.setBackgroundColor(Some(&UIColor::colorWithWhite_alpha(1.0, 0.12)));
+                    bg.setBackgroundColor(Some(&UIColor::colorWithWhite_alpha(1.0, 0.15)));
                     config.setBackground(&bg);
                     config.setCornerStyle(objc2_ui_kit::UIButtonConfigurationCornerStyle::Capsule);
-                    config.setBaseForegroundColor(Some(&UIColor::labelColor()));
+                    config.setBaseForegroundColor(Some(&UIColor::whiteColor()));
                     config
                 }
             };
@@ -10605,7 +10605,21 @@ mod imp {
                     let delegate = DayDocPreviewDelegate::new(m);
                     unsafe {
                         doc.setDelegate(Some(&objc2::runtime::ProtocolObject::from_ref(&*delegate)));
-                        doc.presentPreviewAnimated(true);
+                        let presented = doc.presentPreviewAnimated(true);
+                        if !presented {
+                            let root_vc = WINDOW
+                                .with(|w| w.borrow().clone())
+                                .and_then(|w| w.rootViewController());
+                            if let Some(root) = root_vc {
+                                let mut top = root;
+                                while let Some(presented) = top.presentedViewController() {
+                                    top = presented;
+                                }
+                                if let Some(v) = top.view() {
+                                    doc.presentOptionsMenuFromRect_inView_animated(CGRect::ZERO, &v, true);
+                                }
+                            }
+                        }
                     }
                     ACTIVE_DOC_PREVIEW.with(|c| {
                         *c.borrow_mut() = Some((doc, delegate));
