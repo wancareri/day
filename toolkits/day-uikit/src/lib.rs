@@ -6530,13 +6530,24 @@ mod imp {
                     return;
                 }
                 S::Prominent => {
-                    let config = UIButtonConfiguration::borderedProminentButtonConfiguration(mtm);
+                    let config = UIButtonConfiguration::filledButtonConfiguration(mtm);
                     config.setCornerStyle(objc2_ui_kit::UIButtonConfigurationCornerStyle::Capsule);
+                    config.setButtonSize(objc2_ui_kit::UIButtonConfigurationSize::Large);
+                    let bg_color = objc2_ui_kit::UIColor::colorWithRed_green_blue_alpha(
+                        36.0 / 255.0,
+                        139.0 / 255.0,
+                        218.0 / 255.0,
+                        1.0,
+                    );
+                    config.setBaseBackgroundColor(Some(&bg_color));
+                    config.setBaseForegroundColor(Some(&objc2_ui_kit::UIColor::whiteColor()));
                     config
                 }
                 S::Bordered => UIButtonConfiguration::borderedButtonConfiguration(mtm),
                 S::Tinted(c) => {
                     let config = UIButtonConfiguration::filledButtonConfiguration(mtm);
+                    config.setCornerStyle(objc2_ui_kit::UIButtonConfigurationCornerStyle::Capsule);
+                    config.setButtonSize(objc2_ui_kit::UIButtonConfigurationSize::Large);
                     config.setBaseBackgroundColor(Some(&uicolor(c)));
                     config.setBaseForegroundColor(Some(&uicolor(S::on_tint(c))));
                     config
