@@ -6535,18 +6535,34 @@ mod imp {
                     config
                 }
                 S::Glass => {
-                    let config = UIButtonConfiguration::plainButtonConfiguration(mtm);
-                    let bg = objc2_ui_kit::UIBackgroundConfiguration::clearConfiguration(mtm);
-                    let blur = objc2_ui_kit::UIBlurEffect::effectWithStyle(
-                        objc2_ui_kit::UIBlurEffectStyle::SystemUltraThinMaterial,
-                        mtm,
-                    );
-                    bg.setVisualEffect(Some(&blur));
-                    bg.setBackgroundColor(Some(&UIColor::colorWithWhite_alpha(1.0, 0.15)));
-                    config.setBackground(&bg);
-                    config.setCornerStyle(objc2_ui_kit::UIButtonConfigurationCornerStyle::Capsule);
-                    config.setBaseForegroundColor(Some(&UIColor::whiteColor()));
-                    config
+                    let cls = objc2::runtime::AnyClass::get(c"UIButtonConfiguration");
+                    let mut config_opt: Option<Retained<UIButtonConfiguration>> = None;
+                    if let Some(c) = cls {
+                        let sel_prominent = objc2::sel!(prominentGlassButtonConfiguration);
+                        let sel_glass = objc2::sel!(glassButtonConfiguration);
+                        if c.responds_to(sel_prominent) {
+                            config_opt = Some(msg_send![c, prominentGlassButtonConfiguration]);
+                        } else if c.responds_to(sel_glass) {
+                            config_opt = Some(msg_send![c, glassButtonConfiguration]);
+                        }
+                    }
+                    if let Some(config) = config_opt {
+                        config.setCornerStyle(objc2_ui_kit::UIButtonConfigurationCornerStyle::Capsule);
+                        config
+                    } else {
+                        let config = UIButtonConfiguration::plainButtonConfiguration(mtm);
+                        let bg = objc2_ui_kit::UIBackgroundConfiguration::clearConfiguration(mtm);
+                        let blur = objc2_ui_kit::UIBlurEffect::effectWithStyle(
+                            objc2_ui_kit::UIBlurEffectStyle::SystemUltraThinMaterial,
+                            mtm,
+                        );
+                        bg.setVisualEffect(Some(&blur));
+                        bg.setBackgroundColor(Some(&UIColor::colorWithWhite_alpha(1.0, 0.15)));
+                        config.setBackground(&bg);
+                        config.setCornerStyle(objc2_ui_kit::UIButtonConfigurationCornerStyle::Capsule);
+                        config.setBaseForegroundColor(Some(&UIColor::labelColor()));
+                        config
+                    }
                 }
             };
             config.setTitle(Some(&NSString::from_str(title)));
