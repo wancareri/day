@@ -31,6 +31,7 @@ pub use textarea::set_text_input_trait;
 
 #[cfg(target_os = "ios")]
 pub mod ext;
+pub use ext::UiKitExt;
 #[cfg(target_os = "ios")]
 pub use ext::*;
 
