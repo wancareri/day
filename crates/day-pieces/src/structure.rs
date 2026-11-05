@@ -138,6 +138,84 @@ impl Piece for When {
     }
 }
 
+/// A dynamic piece whose arm is rebuilt whenever `source()` produces a new value. Built by [`dyn_piece`].
+pub fn dyn_piece<T, P>(
+    source: impl Fn() -> T + 'static,
+    build_arm: impl Fn(T) -> P + 'static,
+) -> DynPiece<T>
+where
+    T: PartialEq + Clone + 'static,
+    P: Piece + 'static,
+{
+    DynPiece {
+        source: Rc::new(source),
+        build: Rc::new(move |val| AnyPiece::new(build_arm(val))),
+    }
+}
+
+pub struct DynPiece<T> {
+    source: Rc<dyn Fn() -> T>,
+    build: Rc<dyn Fn(T) -> AnyPiece>,
+}
+
+impl<T: PartialEq + Clone + 'static> Piece for DynPiece<T> {
+    fn build(self, cx: &mut BuildCx) -> RNode {
+        let anchor = cx.layout_only(
+            Rc::new(PassThrough),
+            Flex {
+                is_group: true,
+                ..Default::default()
+            },
+            Boundary::No,
+        );
+        let state: Rc<RefCell<Option<Scope>>> = Rc::new(RefCell::new(None));
+        let owner = Scope::current();
+        let DynPiece { source, build } = self;
+
+        let mount = {
+            let state = state.clone();
+            let build = build.clone();
+            move |val: T| {
+                if !with_tree(|t| t.node_exists(anchor)) {
+                    return;
+                }
+                if let Some(scope) = state.borrow_mut().take() {
+                    scope.dispose();
+                    while with_tree(|t| t.child_count(anchor)) > 0 {
+                        let child = with_tree(|t| t.first_child(anchor));
+                        match child {
+                            Some(c) => with_tree(|t| t.remove_subtree(c)),
+                            None => break,
+                        }
+                    }
+                }
+                let arm = build(val);
+                let scope = owner.enter(Scope::child);
+                scope.enter(|| {
+                    let mut cx = BuildCx::new(anchor);
+                    let _ = arm.build(&mut cx);
+                });
+                *state.borrow_mut() = Some(scope);
+            }
+        };
+
+        let initial = {
+            let source = source.clone();
+            day_reactive::untrack(move || source())
+        };
+        mount(initial);
+        watch(
+            move || source(),
+            move |now, old| {
+                if Some(now) != old {
+                    mount(now.clone());
+                }
+            },
+        );
+        anchor
+    }
+}
+
 /// A `Copy` handle to one keyed item's state — the unified `each`/`list` contract (§5.4).
 pub struct ItemSlot<T: 'static, K: 'static> {
     sig: Signal<T>,

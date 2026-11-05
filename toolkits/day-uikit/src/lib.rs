@@ -8587,6 +8587,14 @@ mod imp {
                         tf.setPlaceholder(Some(&NSString::from_str(&p.placeholder)));
                         tf.setBorderStyle(UITextBorderStyle::RoundedRect);
                         tf.setSecureTextEntry(p.secure);
+                        let ctype = if p.secure {
+                            NSString::from_str("password")
+                        } else {
+                            NSString::from_str("username")
+                        };
+                        let _: () = objc2::msg_send![&*tf, setTextContentType: &*ctype];
+                        let _: () = objc2::msg_send![&*tf, setAutocapitalizationType: 0isize];
+                        let _: () = objc2::msg_send![&*tf, setAutocorrectionType: 1isize];
                         let tobj: &AnyObject = target.as_ref();
                         tf.addTarget_action_forControlEvents(
                             Some(tobj),
