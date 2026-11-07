@@ -6543,7 +6543,11 @@ mod imp {
                     config.setBaseForegroundColor(Some(&objc2_ui_kit::UIColor::whiteColor()));
                     config
                 }
-                S::Bordered => UIButtonConfiguration::borderedButtonConfiguration(mtm),
+                S::Bordered => {
+                    let config = UIButtonConfiguration::borderedButtonConfiguration(mtm);
+                    config.setCornerStyle(objc2_ui_kit::UIButtonConfigurationCornerStyle::Capsule);
+                    config
+                }
                 S::Tinted(c) => {
                     let config = UIButtonConfiguration::filledButtonConfiguration(mtm);
                     config.setCornerStyle(objc2_ui_kit::UIButtonConfigurationCornerStyle::Capsule);
@@ -6588,13 +6592,17 @@ mod imp {
             let attr_s = NSMutableAttributedString::initWithString(NSMutableAttributedString::alloc(), &ns);
             let whole = NSRange::new(0, ns.length());
             attr_s.addAttribute_value_range(objc2_ui_kit::NSFontAttributeName, &font, whole);
-            attr_s.addAttribute_value_range(objc2_ui_kit::NSForegroundColorAttributeName, &objc2_ui_kit::UIColor::whiteColor(), whole);
+            if matches!(style, S::Prominent | S::Tinted(_)) {
+                attr_s.addAttribute_value_range(objc2_ui_kit::NSForegroundColorAttributeName, &objc2_ui_kit::UIColor::whiteColor(), whole);
+            }
             config.setAttributedTitle(Some(&attr_s));
             btn.setConfiguration(Some(&config));
             if let Some(tl) = btn.titleLabel() {
                 unsafe {
                     tl.setFont(Some(&font));
-                    tl.setTextColor(Some(&objc2_ui_kit::UIColor::whiteColor()));
+                    if matches!(style, S::Prominent | S::Tinted(_)) {
+                        tl.setTextColor(Some(&objc2_ui_kit::UIColor::whiteColor()));
+                    }
                 }
             }
         }
@@ -9100,12 +9108,19 @@ mod imp {
                                     let attr_s = NSMutableAttributedString::initWithString(NSMutableAttributedString::alloc(), &ns);
                                     let whole = NSRange::new(0, ns.length());
                                     attr_s.addAttribute_value_range(objc2_ui_kit::NSFontAttributeName, &font, whole);
-                                    attr_s.addAttribute_value_range(objc2_ui_kit::NSForegroundColorAttributeName, &objc2_ui_kit::UIColor::whiteColor(), whole);
+                                    let is_prominent = BUTTON_STYLES.with(|m| {
+                                        m.borrow().get(&ptr_of(btn)).map_or(false, |s| matches!(s, day_spec::props::ButtonStyleSpec::Prominent | day_spec::props::ButtonStyleSpec::Tinted(_)))
+                                    });
+                                    if is_prominent {
+                                        attr_s.addAttribute_value_range(objc2_ui_kit::NSForegroundColorAttributeName, &objc2_ui_kit::UIColor::whiteColor(), whole);
+                                    }
                                     config.setAttributedTitle(Some(&attr_s));
                                     btn.setConfiguration(Some(&config));
                                     if let Some(tl) = btn.titleLabel() {
                                         tl.setFont(Some(&font));
-                                        tl.setTextColor(Some(&objc2_ui_kit::UIColor::whiteColor()));
+                                        if is_prominent {
+                                            tl.setTextColor(Some(&objc2_ui_kit::UIColor::whiteColor()));
+                                        }
                                     }
                                 } else {
                                     btn.setTitle_forState(
