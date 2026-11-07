@@ -9108,9 +9108,7 @@ mod imp {
                                     let attr_s = NSMutableAttributedString::initWithString(NSMutableAttributedString::alloc(), &ns);
                                     let whole = NSRange::new(0, ns.length());
                                     attr_s.addAttribute_value_range(objc2_ui_kit::NSFontAttributeName, &font, whole);
-                                    let is_prominent = BUTTON_STYLES.with(|m| {
-                                        m.borrow().get(&ptr_of(btn)).map_or(false, |s| matches!(s, day_spec::props::ButtonStyleSpec::Prominent | day_spec::props::ButtonStyleSpec::Tinted(_)))
-                                    });
+                                    let is_prominent = config.baseBackgroundColor().is_some();
                                     if is_prominent {
                                         attr_s.addAttribute_value_range(objc2_ui_kit::NSForegroundColorAttributeName, &objc2_ui_kit::UIColor::whiteColor(), whole);
                                     }
